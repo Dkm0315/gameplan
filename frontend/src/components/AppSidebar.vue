@@ -117,30 +117,31 @@
             :class="!noCategories && 'pl-6'"
             v-show="isGroupOpen[group.name]"
           >
-            <AppLink
-              v-for="space in group.spaces"
-              :key="space.name"
-              :to="{ name: 'Space', params: { spaceId: space.name } }"
-              class="flex h-7 items-center rounded px-2 text-ink-gray-7 transition"
-              activeClass="bg-surface-selected shadow-sm"
-              inactiveClass="hover:bg-surface-gray-2"
-            >
-              <span class="inline-flex min-w-0 items-center w-full">
-                <span class="flex-shrink-0 flex h-5 w-6 items-center justify-center text-xl">
-                  {{ space.icon }}
+            <div v-for="space in group.spaces" :key="space.name">
+              <AppLink
+                :to="{ name: 'Space', params: { spaceId: space.name } }"
+                class="flex h-7 items-center rounded px-2 text-ink-gray-7 transition"
+                activeClass="bg-surface-selected shadow-sm"
+                inactiveClass="hover:bg-surface-gray-2"
+              >
+                <span class="inline-flex min-w-0 items-center w-full">
+                  <span class="flex-shrink-0 flex h-5 w-6 items-center justify-center text-xl">
+                    {{ space.icon }}
+                  </span>
+                  <span class="truncate text-sm flex-grow w-full ml-2">
+                    {{ space.title }}
+                  </span>
+                  <span v-if="space.is_private" class="lucide-lock flex-shrink-0 h-3 w-3 ml-2" />
+                  <span
+                    v-if="getSpaceUnreadCount(space.name) > 0"
+                    class="ml-auto pl-2 text-xs text-ink-gray-5"
+                  >
+                    {{ getSpaceUnreadCount(space.name) }}
+                  </span>
                 </span>
-                <span class="truncate text-sm flex-grow w-full ml-2">
-                  {{ space.title }}
-                </span>
-                <span v-if="space.is_private" class="lucide-lock flex-shrink-0 h-3 w-3 ml-2" />
-                <span
-                  v-if="getSpaceUnreadCount(space.name) > 0"
-                  class="ml-auto pl-2 text-xs text-ink-gray-5"
-                >
-                  {{ getSpaceUnreadCount(space.name) }}
-                </span>
-              </span>
-            </AppLink>
+              >
+              </AppLink>
+            </div>
             <div
               class="flex h-7 items-center px-2 text-sm text-ink-gray-5"
               v-if="group.spaces.length === 0"
@@ -265,6 +266,38 @@ const navigation = computed(() => {
         name: 'MyTasks',
       },
       isActive: testRoute(/MyTasks|Task/g),
+    },
+    {
+      name: 'Kanban',
+      icon: 'lucide-columns-3',
+      route: {
+        name: 'Kanban',
+      },
+      isActive: testRoute(/Kanban/g),
+    },
+    {
+      name: 'Sprints',
+      icon: 'lucide-list-checks',
+      route: {
+        name: 'Sprints',
+      },
+      isActive: testRoute(/Sprints/g),
+    },
+    {
+      name: 'Calendar',
+      icon: 'lucide-calendar-days',
+      route: {
+        name: 'Calendar',
+      },
+      isActive: testRoute(/Calendar/g),
+    },
+    {
+      name: 'Decisions',
+      icon: 'lucide-message-square-check',
+      route: {
+        name: 'Decisions',
+      },
+      isActive: testRoute(/Decisions/g),
     },
     {
       name: 'Pages',

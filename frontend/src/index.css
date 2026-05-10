@@ -25,6 +25,10 @@ html {
     @apply max-w-[940px] w-full px-3 sm:px-5 mx-auto;
   }
 
+  .workspace-container {
+    @apply max-w-[1440px] w-full px-3 sm:px-5 mx-auto;
+  }
+
   .discussion-container {
     max-width: calc(720px + var(--discussion-padding));
     @apply w-full px-3 sm:px-5 mx-auto;

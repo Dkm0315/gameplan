@@ -36,15 +36,15 @@ export let spaces = useList<Space>({
     'tasks_count',
     'discussions_count',
     'team.title as team_title',
-    { members: ['user'] },
   ],
   initialData: [],
   orderBy: 'title asc',
   limit: 99999,
-  cacheKey: 'spaces',
+  cacheKey: 'spaces-v2',
   transform(data) {
     for (let space of data) {
       space.name = space.name.toString()
+      space.members = space.members || []
     }
     return data
   },

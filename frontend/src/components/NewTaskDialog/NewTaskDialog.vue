@@ -36,6 +36,16 @@
             :options="spaceOptions"
             v-model="newTask.doc.project"
           />
+          <Combobox
+            placeholder="Select sprint"
+            :options="sprintOptions"
+            v-model="newTask.doc.sprint"
+          />
+          <Dropdown class="w-full" :options="priorityOptions()">
+            <Button>
+              {{ newTask.doc.priority || 'Priority' }}
+            </Button>
+          </Dropdown>
           <Dropdown class="w-full" :options="statusOptions()">
             <Button>
               <template #prefix v-if="newTask.doc.status">
@@ -60,7 +70,7 @@
 </template>
 <script setup lang="ts">
 import { computed, h, useTemplateRef, watch } from 'vue'
-import { Dialog, FormControl, Dropdown, Combobox, DatePicker } from 'frappe-ui'
+import { Dialog, FormControl, Dropdown, Combobox, DatePicker, useCall } from 'frappe-ui'
 import TaskStatusIcon from './TaskStatusIcon.vue'
 import { activeUsers } from '@/data/users'
 import { GPTask } from '@/types/doctypes'
@@ -70,6 +80,11 @@ import KeyboardShortcut from '../KeyboardShortcut.vue'
 
 const titleInput = useTemplateRef('titleInput')
 let spaceOptions = useGroupedSpaceOptions({ filterFn: (space) => !space.archived_at })
+const sprints = useCall({
+  url: '/api/v2/method/gameplan.api.get_space_sprints',
+  method: 'POST',
+  immediate: false,
+})
 
 function statusOptions() {
   return (['Backlog', 'Todo', 'In Progress', 'Done', 'Canceled'] as GPTask['status'][]).map(
@@ -86,6 +101,25 @@ function statusOptions() {
     },
   )
 }
+
+function priorityOptions() {
+  return ['Urgent', 'High', 'Medium', 'Low'].map((priority) => ({
+    label: priority,
+    onClick: () => {
+      if (newTask.value) {
+        newTask.value.doc.priority = priority as GPTask['priority']
+      }
+    },
+  }))
+}
+
+const sprintOptions = computed(() => [
+  { label: 'Backlog', value: '' },
+  ...((sprints.data?.sprints || []) as Array<{ name: string; title: string }>).map((sprint) => ({
+    label: sprint.title,
+    value: sprint.name,
+  })),
+])
 
 const assignableUsers = computed(() => {
   return activeUsers.value.map((user) => ({
@@ -122,4 +156,14 @@ watch(showDialog, (val) => {
     }, 100)
   }
 })
+
+watch(
+  () => newTask.value?.doc.project,
+  (project) => {
+    if (project) {
+      sprints.submit({ space_id: project })
+    }
+  },
+  { immediate: true },
+)
 </script>

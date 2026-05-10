@@ -9,6 +9,12 @@
   "project",
   "team",
   "status",
+  "work_type",
+  "decision_status",
+  "decision_owner",
+  "approved_by",
+  "approved_at",
+  "converted_task",
   "title",
   "slug",
   "content",
@@ -48,6 +54,47 @@
    "fieldtype": "Data",
    "in_list_view": 1,
    "label": "Status"
+  },
+  {
+   "default": "Discussion",
+   "fieldname": "work_type",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Work Type",
+   "options": "Discussion\nQuestion\nDecision Needed\nIncident Follow-up\nRelease Note\nArchitecture Note"
+  },
+  {
+   "fieldname": "decision_status",
+   "fieldtype": "Select",
+   "in_standard_filter": 1,
+   "label": "Decision Status",
+   "options": "\nDraft\nNeeds Approval\nApproved\nRejected\nConverted to Task"
+  },
+  {
+   "fieldname": "decision_owner",
+   "fieldtype": "Link",
+   "label": "Decision Owner",
+   "options": "User"
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_at",
+   "fieldtype": "Datetime",
+   "label": "Approved At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "converted_task",
+   "fieldtype": "Link",
+   "label": "Converted Task",
+   "options": "GP Task",
+   "read_only": 1
   },
   {
    "fieldname": "title",

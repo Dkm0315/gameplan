@@ -29,7 +29,18 @@ class GPTask(HasMentions, HasActivity, Document):
 		self.log_value_updates()
 
 	def log_value_updates(self):
-		fields = ["title", "description", "status", "priority", "assigned_to", "due_date", "project"]
+		fields = [
+			"title",
+			"description",
+			"status",
+			"priority",
+			"assigned_to",
+			"due_date",
+			"project",
+			"sprint",
+			"testing_notes",
+			"proof_url",
+		]
 		for field in fields:
 			prev_doc = self.get_doc_before_save()
 			if prev_doc and str(self.get(field)) != str(prev_doc.get(field)):

@@ -2,6 +2,7 @@ import { GPPinnedProject } from '@/types/doctypes'
 import { useList } from 'frappe-ui'
 
 export const pinnedSpaces = useList<GPPinnedProject>({
+  url: '/api/v2/method/gameplan.extends.client.get_list',
   doctype: 'GP Pinned Project',
   fields: ['project', 'team', 'user', 'name'],
   filters: {
@@ -10,7 +11,7 @@ export const pinnedSpaces = useList<GPPinnedProject>({
   initialData: [],
   orderBy: 'creation desc',
   limit: 99999,
-  cacheKey: 'pinnedSpaces',
+  cacheKey: 'pinnedSpaces-v2',
 })
 
 export function isPinned(spaceId: string) {

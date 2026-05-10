@@ -59,6 +59,26 @@ let router = createRouter({
       props: true,
     },
     {
+      name: 'Kanban',
+      path: '/kanban',
+      component: () => import('@/pages/Kanban.vue'),
+    },
+    {
+      name: 'Sprints',
+      path: '/sprints',
+      component: () => import('@/pages/SpaceSprints.vue'),
+    },
+    {
+      name: 'Calendar',
+      path: '/calendar',
+      component: () => import('@/pages/SpaceCalendar.vue'),
+    },
+    {
+      name: 'Decisions',
+      path: '/decisions',
+      component: () => import('@/pages/SpaceDecisions.vue'),
+    },
+    {
       name: 'MyPages',
       path: '/pages',
       component: () => import('@/pages/MyPages.vue'),
@@ -108,13 +128,37 @@ let router = createRouter({
       name: 'Space',
       path: '/space/:spaceId',
       component: () => import('@/pages/Space.vue'),
-      redirect: { name: 'SpaceDiscussions' },
+      redirect: { name: 'SpaceOperations' },
       props: true,
       children: [
+        {
+          name: 'SpaceOperations',
+          path: 'operations',
+          component: () => import('@/pages/SpaceOperations.vue'),
+          props: true,
+        },
         {
           name: 'SpaceDiscussions',
           path: 'discussions',
           component: () => import('@/pages/SpaceDiscussions.vue'),
+          props: true,
+        },
+        {
+          name: 'SpaceSprints',
+          path: 'sprints',
+          component: () => import('@/pages/SpaceSprints.vue'),
+          props: true,
+        },
+        {
+          name: 'SpaceCalendar',
+          path: 'calendar',
+          component: () => import('@/pages/SpaceCalendar.vue'),
+          props: true,
+        },
+        {
+          name: 'SpaceDecisions',
+          path: 'decisions',
+          component: () => import('@/pages/SpaceDecisions.vue'),
           props: true,
         },
         {

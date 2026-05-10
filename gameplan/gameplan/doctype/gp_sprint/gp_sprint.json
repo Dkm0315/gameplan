@@ -1,71 +1,81 @@
 {
  "actions": [],
  "autoname": "autoincrement",
- "creation": "2023-05-05 23:53:35.768482",
- "default_view": "List",
+ "creation": "2026-05-10 00:00:00.000000",
  "doctype": "DocType",
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
   "title",
-  "category",
-  "content",
-  "slug",
   "project",
-  "user",
-  "team"
+  "status",
+  "start_date",
+  "end_date",
+  "goal",
+  "sprint_owner",
+  "idx"
  ],
  "fields": [
   {
    "fieldname": "title",
    "fieldtype": "Data",
-   "label": "Title"
-  },
-  {
-   "fieldname": "category",
-   "fieldtype": "Link",
-   "in_standard_filter": 1,
-   "label": "Category",
-   "options": "GP Page Category"
-  },
-  {
-   "fieldname": "content",
-   "fieldtype": "Text Editor",
-   "label": "Content"
+   "in_list_view": 1,
+   "label": "Title",
+   "reqd": 1
   },
   {
    "fieldname": "project",
    "fieldtype": "Link",
-   "label": "Project",
-   "options": "GP Project"
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Space",
+   "options": "GP Project",
+   "reqd": 1
   },
   {
-   "fieldname": "slug",
-   "fieldtype": "Data",
-   "label": "Slug",
-   "read_only": 1
+   "default": "Planned",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Status",
+   "options": "Planned\nCurrent\nClosed"
   },
   {
-   "fieldname": "user",
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Start Date"
+  },
+  {
+   "fieldname": "end_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "End Date"
+  },
+  {
+   "fieldname": "goal",
+   "fieldtype": "Small Text",
+   "label": "Goal"
+  },
+  {
+   "fieldname": "sprint_owner",
    "fieldtype": "Link",
-   "label": "User",
+   "label": "Sprint Owner",
    "options": "User"
   },
   {
-   "fetch_from": "project.team",
-   "fieldname": "team",
-   "fieldtype": "Link",
-   "label": "Team",
-   "options": "GP Team",
-   "read_only": 1
+   "fieldname": "idx",
+   "fieldtype": "Int",
+   "label": "Index"
   }
  ],
  "index_web_pages_for_search": 1,
  "links": [],
- "modified": "2024-02-06 12:18:02.871772",
+ "modified": "2026-05-10 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Gameplan",
- "name": "GP Page",
+ "name": "GP Sprint",
  "naming_rule": "Autoincrement",
  "owner": "Administrator",
  "permissions": [
@@ -117,8 +127,8 @@
    "write": 1
   }
  ],
- "sort_field": "modified",
+ "sort_field": "start_date",
  "sort_order": "DESC",
  "states": [],
- "track_changes": 1
+ "title_field": "title"
 }

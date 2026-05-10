@@ -27,6 +27,18 @@ export interface GPTask extends DocType {
   status: 'Backlog' | 'Todo' | 'In Progress' | 'Done' | 'Canceled'
   /** Priority: Select */
   priority?: '' | 'Urgent' | 'High' | 'Medium' | 'Low'
+  /** Sprint: Link (GP Sprint) */
+  sprint?: string
+  /** Source Type: Select */
+  source_type?: '' | 'Manual' | 'Discussion' | 'Helpdesk' | 'Codex'
+  /** Source DocType: Link (DocType) */
+  source_doctype?: string
+  /** Source Name: Dynamic Link (source_doctype) */
+  source_name?: string
+  /** Testing Notes: Text Editor */
+  testing_notes?: string
+  /** Proof / Drive URL: Data */
+  proof_url?: string
   /** Is Completed: Check */
   is_completed: 0 | 1
   /** Project: Link (GP Project) */
@@ -75,6 +87,8 @@ export interface GPUserProfile extends DocType {
 export interface GPPage extends DocType {
   /** Title: Data */
   title?: string
+  /** Category: Link (GP Page Category) */
+  category?: string
   /** Content: Text Editor */
   content?: string
   /** Project: Link (GP Project) */
@@ -125,6 +139,18 @@ export interface GPDiscussion extends DocType {
   content?: string
   /** Status: Data */
   status?: string
+  /** Work Type: Select */
+  work_type?: 'Discussion' | 'Question' | 'Decision Needed' | 'Incident Follow-up' | 'Release Note' | 'Architecture Note'
+  /** Decision Status: Select */
+  decision_status?: '' | 'Draft' | 'Needs Approval' | 'Approved' | 'Rejected' | 'Converted to Task'
+  /** Decision Owner: Link (User) */
+  decision_owner?: string
+  /** Approved By: Link (User) */
+  approved_by?: string
+  /** Approved At: Datetime */
+  approved_at?: string
+  /** Converted Task: Link (GP Task) */
+  converted_task?: string
   /** Title: Data */
   title: string
   /** Reactions: Table (GP Reaction) */
@@ -157,6 +183,40 @@ export interface GPDiscussion extends DocType {
   tags: GPTagLink[]
   /** Pin Scope: Select */
   pin_scope?: 'Global' | 'Space'
+}
+
+// Last updated: 2026-05-10 00:00:00.000000
+export interface GPSprint extends DocType {
+  /** Title: Data */
+  title: string
+  /** Space: Link (GP Project) */
+  project: string
+  /** Status: Select */
+  status?: 'Planned' | 'Current' | 'Closed'
+  /** Start Date: Date */
+  start_date?: string
+  /** End Date: Date */
+  end_date?: string
+  /** Goal: Small Text */
+  goal?: string
+  /** Sprint Owner: Link (User) */
+  sprint_owner?: string
+  /** Index: Int */
+  idx?: number
+}
+
+// Last updated: 2026-05-10 00:00:00.000000
+export interface GPPageCategory extends DocType {
+  /** Title: Data */
+  title: string
+  /** Space: Link (GP Project) */
+  project: string
+  /** Description: Small Text */
+  description?: string
+  /** Icon: Data */
+  icon?: string
+  /** Index: Int */
+  idx?: number
 }
 
 // Last updated: 2023-02-13 21:00:23.191195

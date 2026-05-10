@@ -12,6 +12,14 @@
   "due_date",
   "status",
   "priority",
+  "sprint",
+  "source_section",
+  "source_type",
+  "source_doctype",
+  "source_name",
+  "testing_section",
+  "testing_notes",
+  "proof_url",
   "is_completed",
   "completed_at",
   "completed_by",
@@ -57,6 +65,52 @@
    "fieldtype": "Select",
    "label": "Priority",
    "options": "\nUrgent\nHigh\nMedium\nLow"
+  },
+  {
+   "fieldname": "sprint",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "label": "Sprint",
+   "options": "GP Sprint"
+  },
+  {
+   "fieldname": "source_section",
+   "fieldtype": "Section Break",
+   "label": "Source"
+  },
+  {
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "\nManual\nDiscussion\nHelpdesk\nCodex"
+  },
+  {
+   "fieldname": "source_doctype",
+   "fieldtype": "Link",
+   "label": "Source DocType",
+   "options": "DocType"
+  },
+  {
+   "fieldname": "source_name",
+   "fieldtype": "Dynamic Link",
+   "label": "Source Name",
+   "options": "source_doctype"
+  },
+  {
+   "fieldname": "testing_section",
+   "fieldtype": "Section Break",
+   "label": "Testing and Proof"
+  },
+  {
+   "fieldname": "testing_notes",
+   "fieldtype": "Text Editor",
+   "label": "Testing Notes"
+  },
+  {
+   "fieldname": "proof_url",
+   "fieldtype": "Data",
+   "label": "Proof / Drive URL"
   },
   {
    "default": "0",
