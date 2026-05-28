@@ -311,7 +311,13 @@ export default {
       return `Ended at ${dayjsLocal(timestamp).format('D MMM YYYY, h:mm A')}`
     },
     _poll() {
-      return this.$resources.poll.doc || this.poll
+      return {
+        options: [],
+        votes: [],
+        reactions: [],
+        total_votes: 0,
+        ...(this.$resources.poll.doc || this.poll),
+      }
     },
   },
 }

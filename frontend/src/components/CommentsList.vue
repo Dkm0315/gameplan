@@ -83,8 +83,21 @@
             :discardButtonProps="{
               onClick: discardComment,
             }"
+            :assistantActionProps="aiToggleActionProps"
             :editable="showCommentBox"
             placeholder="Add a comment"
+          />
+          <!-- Floating drawer (teleported to body) — no longer mounted inline
+               below the comment composer. -->
+          <NextAIPanel
+            v-if="aiPanelOpen"
+            :open="aiPanelOpen"
+            :surface="doctype === 'GP Task' ? 'gameplan_task' : 'gameplan'"
+            :reference-doctype="doctype"
+            :reference-name="name"
+            :get-parent-editor="getCommentEditor"
+            :on-insert="onInsertFromAI"
+            @update:open="(v) => (aiPanelOpen = v)"
           />
         </div>
       </div>
@@ -96,6 +109,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useList } from 'frappe-ui'
 import CommentEditor from '@/components/CommentEditor.vue'
+import NextAIPanel from '@/components/openclaw/NextAIPanel.vue'
 import Comment from './Comment.vue'
 import Activity from './Activity.vue'
 import UserAvatar from './UserAvatar.vue'
@@ -122,7 +136,30 @@ const route = useRoute()
 const socket = useSocket()
 
 const showCommentBox = ref(false)
+const aiPanelOpen = ref(false)
 const newComment = ref(localStorage.getItem(draftCommentKey()) || '')
+
+const aiToggleActionProps = computed(() => ({
+  label: aiPanelOpen.value ? 'Hide NextAI' : 'Ask NextAI',
+  iconLeft: 'lucide-sparkles',
+  variant: 'subtle',
+  onClick: () => {
+    aiPanelOpen.value = !aiPanelOpen.value
+  },
+}))
+
+function getCommentEditor() {
+  return newCommentEditor.value?.editor || null
+}
+
+function onInsertFromAI(text: string) {
+  insertCommentDraft(text)
+}
+
+function openAIPanel() {
+  showCommentBox.value = true
+  aiPanelOpen.value = true
+}
 const newMessagesFrom = ref(props.newCommentsFrom)
 const highlightedItem = ref(null)
 const newCommentEditor = ref(null)
@@ -137,7 +174,6 @@ const comments = useList<
     | 'modified'
     | 'edited_at'
     | 'deleted_at'
-    | 'reactions'
   >
 >({
   doctype: 'GP Comment',
@@ -150,7 +186,6 @@ const comments = useList<
     'modified',
     'edited_at',
     'deleted_at',
-    { reactions: ['name', 'user', 'emoji'] },
   ],
   transform(data) {
     return data.map((d) => ({ ...d, name: d.name.toString(), doctype: 'GP Comment' }))
@@ -371,6 +406,35 @@ function onNewCommentChange(content: string) {
   }, 0)
 }
 
+function openCommentBox() {
+  showCommentBox.value = true
+}
+
+async function insertCommentDraft(content: string) {
+  if (!content?.trim() || props.readOnlyMode || props.disableNewComment) return
+
+  openCommentBox()
+  await nextTick()
+
+  const separator = commentEmpty.value ? '' : '<p></p>'
+  const html = `${separator}${escapeHtml(content).replace(/\n/g, '<br>')}`
+  const editor = editorObject.value
+
+  if (editor) {
+    editor.chain().focus().insertContent(html).run()
+    onNewCommentChange(editor.getHTML())
+  } else {
+    onNewCommentChange(`${newComment.value || ''}${html}`)
+  }
+}
+
+function escapeHtml(content: string) {
+  return content
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
 function setItemRef($component: any, item: any) {
   if ($component?.$el) {
     item.$el = $component.$el
@@ -400,5 +464,11 @@ socket.on('new_activity', (data) => {
 
 onUnmounted(() => {
   socket.off('new_activity')
+})
+
+defineExpose({
+  insertCommentDraft,
+  openCommentBox,
+  openAIPanel,
 })
 </script>

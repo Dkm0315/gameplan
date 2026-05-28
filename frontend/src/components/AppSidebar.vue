@@ -276,6 +276,14 @@ const navigation = computed(() => {
       isActive: testRoute(/Kanban/g),
     },
     {
+      name: 'NextAI',
+      icon: 'lucide-sparkles',
+      route: {
+        name: 'NextAI',
+      },
+      isActive: testRoute(/NextAI/g),
+    },
+    {
       name: 'Sprints',
       icon: 'lucide-list-checks',
       route: {

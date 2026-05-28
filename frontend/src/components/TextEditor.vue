@@ -41,6 +41,14 @@ const users = computed(() => {
       label: 'Everyone',
       value: '_everyone_',
     },
+    {
+      label: 'NextAI',
+      value: 'nextai',
+    },
+    {
+      label: 'OpenClaw',
+      value: 'openclaw',
+    },
   ].concat(
     activeUsers.value.map((user) => ({
       label: user.full_name.trimEnd(),

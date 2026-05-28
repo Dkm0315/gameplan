@@ -64,6 +64,12 @@ let router = createRouter({
       component: () => import('@/pages/Kanban.vue'),
     },
     {
+      name: 'NextAI',
+      path: '/nextai',
+      alias: ['/ai'],
+      component: () => import('@/pages/NextAIWorkspace.vue'),
+    },
+    {
       name: 'Sprints',
       path: '/sprints',
       component: () => import('@/pages/SpaceSprints.vue'),

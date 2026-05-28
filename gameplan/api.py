@@ -4,7 +4,7 @@
 
 import frappe
 from frappe.query_builder.functions import Count
-from frappe.utils import split_emails, validate_email_address
+from frappe.utils import split_emails, strip_html, validate_email_address
 
 import gameplan
 from gameplan.utils import validate_type
@@ -460,6 +460,71 @@ def get_space_operations(space_id: str):
 		"knowledge": _summarize_knowledge(pages),
 		"rbac": _get_operation_rbac(project),
 		"automation": _get_operation_automation_policy(),
+	}
+
+
+@frappe.whitelist()
+def get_ai_handoff_context(reference_doctype: str, reference_name: str):
+	"""Return read-only context for a human-authored OpenClaw handoff.
+
+	This deliberately does not execute work or create downstream tasks. The
+	payload is a small, versioned contract that UI and external agents can use
+	to draft a visible comment that remains approval-gated in Gameplan.
+	"""
+	reference_doctype = (reference_doctype or "").strip()
+	reference_name = (reference_name or "").strip()
+	if reference_doctype not in ("GP Discussion", "GP Comment", "GP Task"):
+		frappe.throw("AI handoff is available for discussions, comments, and tasks only")
+	if not reference_name or not frappe.db.exists(reference_doctype, reference_name):
+		frappe.throw("Invalid handoff reference", frappe.DoesNotExistError)
+
+	reference = frappe.get_doc(reference_doctype, reference_name)
+	if not frappe.has_permission(reference_doctype, "read", doc=reference):
+		frappe.throw("Not permitted", frappe.PermissionError)
+
+	discussion = _get_handoff_discussion(reference) if reference_doctype == "GP Comment" else None
+	project_id = (
+		discussion.project
+		if discussion and discussion.project
+		else reference.project
+		if reference_doctype in ("GP Discussion", "GP Task") and reference.get("project")
+		else None
+	)
+	project = _get_space_doc(project_id) if project_id else None
+	feature_enabled = _is_openclaw_handoff_enabled()
+
+	return {
+		"schema": "gameplan.ai_handoff.v1",
+		"assistant": {
+			"name": "OpenClaw",
+			"mention": "@OpenClaw",
+			"mode": "human_visible_handoff",
+		},
+		"feature_flag": {
+			"key": "gameplan_openclaw_handoff_enabled",
+			"enabled": feature_enabled,
+		},
+		"reference": _handoff_reference_payload(reference),
+		"discussion": _handoff_discussion_payload(discussion) if discussion else None,
+		"task": _handoff_task_payload(reference) if reference_doctype == "GP Task" else None,
+		"space": _space_payload(project) if project else None,
+		"rbac": _get_operation_rbac(project) if project else _get_handoff_fallback_rbac(),
+		"automation": {
+			**_get_operation_automation_policy(),
+			"requires_human_approval": True,
+			"execution": "No code or data-changing action is executed from this handoff",
+		},
+		"capabilities": [
+			"summarize_thread",
+			"draft_development_handoff",
+			"identify_open_questions",
+			"suggest_next_comment",
+			"architect_task",
+			"plan_code_work",
+			"generate_artifacts",
+		]
+		if feature_enabled
+		else [],
 	}
 
 
@@ -1066,10 +1131,11 @@ def update_task_planning(task_id: str, sprint=None, assigned_to=None, status=Non
 	task = frappe.get_doc("GP Task", task_id)
 	if not frappe.has_permission("GP Task", "write", doc=task):
 		frappe.throw("Not permitted", frappe.PermissionError)
-	sprint = sprint or None
-	if sprint and frappe.db.get_value("GP Sprint", sprint, "project") != task.project:
-		frappe.throw("Sprint does not belong to this task's space")
-	task.sprint = sprint
+	if sprint is not None:
+		sprint = sprint or None
+		if sprint and frappe.db.get_value("GP Sprint", sprint, "project") != task.project:
+			frappe.throw("Sprint does not belong to this task's space")
+		task.sprint = sprint
 	if assigned_to is not None:
 		task.assigned_to = assigned_to or None
 	if status:
@@ -1398,6 +1464,99 @@ def _get_operation_automation_policy():
 		"requires_human_approval": True,
 		"codex_execution": "Allowed after approval" if can_execute else "Read-only suggestions",
 		"nextai": "Can draft and classify; cannot execute without approval",
+	}
+
+
+def _is_openclaw_handoff_enabled():
+	return frappe.conf.get("gameplan_openclaw_handoff_enabled", True) not in (False, 0, "0", "false", "False")
+
+
+def _get_handoff_discussion(comment):
+	if comment.reference_doctype != "GP Discussion" or not comment.reference_name:
+		frappe.throw("AI handoff comments must belong to a discussion")
+	discussion = frappe.get_doc("GP Discussion", comment.reference_name)
+	if not frappe.has_permission("GP Discussion", "read", doc=discussion):
+		frappe.throw("Not permitted", frappe.PermissionError)
+	return discussion
+
+
+def _handoff_reference_payload(doc):
+	payload = {
+		"doctype": doc.doctype,
+		"name": str(doc.name),
+		"owner": doc.owner,
+		"created_at": doc.creation,
+		"modified": doc.modified,
+	}
+	if doc.doctype == "GP Discussion":
+		payload.update(
+			{
+				"title": doc.title,
+				"slug": doc.slug,
+				"work_type": doc.work_type,
+				"decision_status": doc.decision_status,
+				"excerpt": _handoff_excerpt(doc.content),
+			}
+		)
+	elif doc.doctype == "GP Comment":
+		payload.update(
+			{
+				"reference_doctype": doc.reference_doctype,
+				"reference_name": str(doc.reference_name),
+				"excerpt": _handoff_excerpt(doc.content),
+			}
+		)
+	elif doc.doctype == "GP Task":
+		payload.update(_handoff_task_payload(doc))
+	return payload
+
+
+def _handoff_discussion_payload(discussion):
+	return {
+		"doctype": "GP Discussion",
+		"name": str(discussion.name),
+		"title": discussion.title,
+		"slug": discussion.slug,
+		"owner": discussion.owner,
+		"work_type": discussion.work_type,
+		"decision_status": discussion.decision_status,
+		"comments_count": discussion.comments_count,
+	}
+
+
+def _handoff_task_payload(task):
+	return {
+		"doctype": "GP Task",
+		"name": str(task.name),
+		"title": task.title,
+		"owner": task.owner,
+		"status": task.status,
+		"priority": task.priority,
+		"assigned_to": task.assigned_to,
+		"project": str(task.project) if task.project else None,
+		"sprint": str(task.sprint) if task.sprint else None,
+		"due_date": task.due_date,
+		"comments_count": task.comments_count,
+		"work_type": _classify_work_type(task.as_dict()),
+		"description_excerpt": _handoff_excerpt(task.description),
+	}
+
+
+def _handoff_excerpt(content, limit=240):
+	text = " ".join(strip_html(content or "").split())
+	if len(text) <= limit:
+		return text
+	return f"{text[: limit - 3].rstrip()}..."
+
+
+def _get_handoff_fallback_rbac():
+	roles = set(frappe.get_roles())
+	is_guest = gameplan.is_guest(frappe.session.user)
+	return {
+		"user": frappe.session.user,
+		"roles": sorted([role for role in roles if role.startswith("Gameplan") or role == "System Manager"]),
+		"can_read": True,
+		"can_execute_ai": bool({"System Manager", "Gameplan Admin", "Gameplan Member"} & roles) and not is_guest,
 	}
 
 
