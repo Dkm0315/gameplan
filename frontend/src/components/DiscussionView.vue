@@ -46,6 +46,12 @@
               </Tooltip>
             </div>
             <div class="ml-auto flex space-x-2">
+              <Button v-if="!readOnlyMode" variant="subtle" @click="askNextAI">
+                <template #prefix>
+                  <span class="lucide-sparkles h-4 w-4" />
+                </template>
+                Ask NextAI
+              </Button>
               <Dropdown
                 v-if="!readOnlyMode"
                 class="ml-auto"
@@ -136,6 +142,7 @@
           </div>
         </div>
         <CommentsArea
+          :key="`comments-${discussion.doc.doctype}-${discussion.doc.name}`"
           doctype="GP Discussion"
           :name="discussion.doc.name"
           :newCommentsFrom="discussion.doc.last_unread_comment?.toString()"
@@ -145,6 +152,9 @@
           @rich-quote-click="handleRichQuoteClick"
           ref="commentsArea"
         />
+        <!-- The inline NextAI panel now lives inside CommentsArea below the
+             composer (see CommentsArea.vue). The Ask NextAI button below opens
+             that inline panel via commentsArea.openAIPanel(). -->
         <Dialog
           :options="{
             title: 'Move discussion to another space',
@@ -317,6 +327,11 @@ const pinDialog = reactive<{
   pinGlobally: false,
 })
 const showRevisionsDialog = ref(false)
+// Legacy: showAIDrawer was used to mount a fixed-right drawer. The drawer is
+// gone; the inline panel inside CommentsArea handles AI now.
+function askNextAI() {
+  commentsArea.value?.openAIPanel?.()
+}
 
 const discussion = useDiscussion(() => props.postId)
 
@@ -404,6 +419,7 @@ function updatePost() {
     })
   editingPost.value = false
 }
+
 
 function updateUrlSlug() {
   let doc = discussion.doc

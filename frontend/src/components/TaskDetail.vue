@@ -19,6 +19,11 @@
             v-model="task.doc.title"
             v-focus
           />
+          <Button label="Ask NextAI" variant="subtle" @click="openTaskAI">
+            <template #prefix>
+              <span class="lucide-sparkles h-4 w-4" />
+            </template>
+          </Button>
           <DropdownMoreOptions
             align="end"
             :options="[
@@ -103,11 +108,25 @@
             @update:modelValue="changeSpace"
           />
         </div>
-        <CommentsList class="mt-8" doctype="GP Task" :name="taskId" />
+        <CommentsList ref="commentsList" class="mt-8" doctype="GP Task" :name="taskId" />
       </div>
     </div>
     <div class="hidden w-[20rem] shrink-0 border-l sm:block">
       <div class="grid grid-cols-2 items-center gap-y-6 p-6 text-base text-ink-gray-6">
+        <div class="col-span-2 rounded-2xl border bg-surface-gray-1 p-3">
+          <div class="flex items-start gap-3">
+            <div class="rounded-xl bg-surface-white p-2 text-ink-gray-8 shadow-sm">
+              <span class="lucide-sparkles h-4 w-4" />
+            </div>
+            <div class="min-w-0 flex-1">
+              <div class="text-sm font-medium text-ink-gray-8">NextAI task copilot</div>
+              <p class="mt-1 text-sm leading-5 text-ink-gray-5">
+                Ask questions, architect the work, plan code changes, or draft a task comment.
+              </p>
+              <Button class="mt-3 w-full justify-center" label="Open task chat" variant="subtle" @click="openTaskAI" />
+            </div>
+          </div>
+        </div>
         <div>Assignee</div>
         <div>
           <Combobox
@@ -169,7 +188,7 @@
 </template>
 
 <script setup lang="ts">
-import { h, computed } from 'vue'
+import { h, computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import TextEditor from '@/components/TextEditor.vue'
 import CommentsList from '@/components/CommentsList.vue'
@@ -191,6 +210,11 @@ const router = useRouter()
 const route = useRoute()
 
 const task = useTask(() => props.taskId)
+const commentsList = ref<InstanceType<typeof CommentsList> | null>(null)
+
+function openTaskAI() {
+  commentsList.value?.openAIPanel?.()
+}
 
 task.onSuccess((doc) => {
   if (['Task', 'SpaceTask'].includes(route.name as string) && route.params.taskId === doc.name) {
@@ -260,4 +284,5 @@ function updateRoute() {
     })
   }
 }
+
 </script>

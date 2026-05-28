@@ -1,13 +1,13 @@
 <template>
-  <div class="workspace-container mt-5">
-    <div class="mb-4 flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+  <div class="w-full px-4 pb-6 pt-5 sm:px-6">
+    <div class="mb-4 flex flex-col gap-3 2xl:flex-row 2xl:items-start 2xl:justify-between">
       <div>
         <h1 class="text-xl font-semibold text-ink-gray-8">Kanban</h1>
         <p class="mt-1 text-base text-ink-gray-5">
           One operational board for backlog, active delivery, testing, and done work.
         </p>
       </div>
-      <div class="grid grid-cols-4 gap-2 lg:w-[32rem]">
+      <div class="grid grid-cols-4 gap-2 2xl:w-[32rem]">
         <Metric label="Backlog" :value="laneCount('Backlog')" />
         <Metric label="Todo" :value="laneCount('Todo')" />
         <Metric label="Progress" :value="laneCount('In Progress')" />
@@ -24,13 +24,19 @@
       <span class="rounded bg-green-50 px-2 py-1 text-green-700">Green: done</span>
     </div>
 
-    <div v-if="!tasks.error" class="grid gap-3 xl:grid-cols-4">
+    <div v-if="updateTaskPlanning.error" class="mb-3 rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+      {{ updateTaskPlanning.error }}
+    </div>
+
+    <div v-if="!tasks.error" class="grid min-h-[calc(100vh-15rem)] grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-4">
       <section
         v-for="lane in lanes"
         :key="lane"
-        class="min-h-[28rem] rounded border"
-        :class="lanePanelClass(lane)"
+        class="flex min-h-[28rem] flex-col rounded border transition"
+        :class="[lanePanelClass(lane), dropTargetLane === lane && 'ring-2 ring-outline-gray-4']"
         @dragover.prevent
+        @dragenter.prevent="dropTargetLane = lane"
+        @dragleave="clearDropTarget(lane)"
         @drop="dropTask(lane)"
       >
         <div class="flex items-center justify-between border-b bg-surface-white px-3 py-2">
@@ -40,13 +46,15 @@
           </div>
           <span class="rounded-full bg-surface-gray-2 px-2 py-0.5 text-xs text-ink-gray-6">{{ groupedTasks[lane]?.length || 0 }}</span>
         </div>
-        <div class="space-y-2 p-2">
+        <div class="flex-1 space-y-2 p-2">
           <button
             v-for="task in groupedTasks[lane]"
             :key="task.name"
             draggable="true"
             class="block w-full cursor-grab rounded border bg-surface-white p-3 text-left shadow-sm transition hover:border-outline-gray-3 hover:shadow active:cursor-grabbing"
-            @dragstart="dragTask(task)"
+            :class="draggedTask?.name === task.name && 'opacity-50'"
+            @dragstart="dragTask($event, task)"
+            @dragend="clearDrag"
             @click="openTask(task)"
           >
             <div class="flex items-start justify-between gap-2">
@@ -64,6 +72,16 @@
               <span v-if="task.due_date" class="rounded bg-surface-gray-2 px-1.5 py-0.5">{{ formatDate(task.due_date) }}</span>
               <span v-if="task.source_type" class="rounded bg-surface-gray-2 px-1.5 py-0.5">{{ task.source_type }}</span>
               <span v-if="task.proof_url || task.testing_notes" class="rounded bg-surface-gray-2 px-1.5 py-0.5">Evidence</span>
+            </div>
+            <div class="mt-3 border-t pt-2">
+              <select
+                class="w-full rounded border-outline-gray-2 bg-surface-white px-2 py-1 text-sm text-ink-gray-7"
+                :value="task.lane"
+                @click.stop
+                @change.stop="moveTask(task, ($event.target as HTMLSelectElement).value)"
+              >
+                <option v-for="status in lanes" :key="status" :value="status">{{ status }}</option>
+              </select>
             </div>
           </button>
           <div v-if="!groupedTasks[lane]?.length" class="rounded border border-dashed px-3 py-8 text-center text-sm text-ink-gray-5">
@@ -100,6 +118,7 @@ const lanes = ['Backlog', 'Todo', 'In Progress', 'Done']
 const tasks = useCall({ url: '/api/v2/method/gameplan.api.get_kanban_tasks', method: 'POST' })
 const updateTaskPlanning = useCall({ url: '/api/v2/method/gameplan.api.update_task_planning', method: 'POST', immediate: false })
 const draggedTask = ref<any>(null)
+const dropTargetLane = ref<string | null>(null)
 const selectedTask = ref<any>(null)
 const showTaskDialog = ref(false)
 
@@ -116,14 +135,35 @@ function laneCount(lane: string) {
   return groupedTasks.value[lane]?.length || 0
 }
 
-function dragTask(task: any) {
+function dragTask(event: DragEvent, task: any) {
   draggedTask.value = task
+  event.dataTransfer?.setData('text/plain', task.name.toString())
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+  }
 }
 
 function dropTask(lane: string) {
-  if (!draggedTask.value || draggedTask.value.status === lane) return
+  dropTargetLane.value = null
+  if (!draggedTask.value) return
   const task = draggedTask.value
   draggedTask.value = null
+  moveTask(task, lane)
+}
+
+function clearDropTarget(lane: string) {
+  if (dropTargetLane.value === lane) {
+    dropTargetLane.value = null
+  }
+}
+
+function clearDrag() {
+  draggedTask.value = null
+  dropTargetLane.value = null
+}
+
+function moveTask(task: any, lane: string) {
+  if (!task || task.lane === lane) return
   updateTaskPlanning.submit({ task_id: task.name, status: lane }).then(() => tasks.submit({}))
 }
 

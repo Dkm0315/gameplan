@@ -17,6 +17,9 @@
       <div v-if="editable" class="mt-2 flex flex-col justify-between sm:flex-row sm:items-center">
         <TextEditorFixedMenu class="-ml-1 overflow-x-auto" :buttons="textEditorMenuButtons" />
         <div class="mt-2 flex items-center justify-end space-x-2 sm:mt-0">
+          <Button v-if="assistantActionProps" v-bind="assistantButtonProps">
+            {{ assistantActionProps.label || '@OpenClaw' }}
+          </Button>
           <Button v-bind="discardButtonProps || {}"> Discard </Button>
           <Button variant="solid" v-bind="submitButtonProps || {}"> Submit </Button>
         </div>
@@ -57,6 +60,10 @@ export default {
       type: Object,
       default: () => ({}),
     },
+    assistantActionProps: {
+      type: Object,
+      default: null,
+    },
   },
   emits: ['change', 'rich-quote', 'rich-quote-click'],
   expose: ['editor'],
@@ -64,6 +71,11 @@ export default {
   computed: {
     editor() {
       return this.$refs.textEditor.editor
+    },
+    assistantButtonProps() {
+      if (!this.assistantActionProps) return null
+      let { label, ...props } = this.assistantActionProps
+      return props
     },
     textEditorMenuButtons() {
       return [

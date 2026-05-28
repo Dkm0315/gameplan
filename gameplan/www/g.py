@@ -38,6 +38,8 @@ def get_boot():
 			"default_route": get_default_route(),
 			"site_name": frappe.local.site,
 			"read_only_mode": frappe.flags.read_only,
+			"openclaw_handoff_enabled": frappe.conf.get("gameplan_openclaw_handoff_enabled", True)
+			not in (False, 0, "0", "false", "False"),
 			"gameplan_frontend_sentry_dsn": frappe.conf.gameplan_frontend_sentry_dsn,
 			"app_version": get_app_version(),
 			"system_timezone": get_system_timezone(),

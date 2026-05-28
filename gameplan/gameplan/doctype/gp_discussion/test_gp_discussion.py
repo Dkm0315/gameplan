@@ -4,6 +4,7 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from gameplan.api import get_ai_handoff_context
 from gameplan.gameplan.doctype.gp_discussion.api import clause_discussions_commented_by_user
 
 
@@ -38,4 +39,30 @@ class TestGPDiscussion(FrappeTestCase):
 		self.assertIsInstance(result, list)
 
 		# Cleanup
+		frappe.db.rollback()
+
+	def test_ai_handoff_context_for_discussion_is_read_only_and_approval_gated(self):
+		project = frappe.get_doc({"doctype": "GP Project", "title": "AI Handoff Test Space"}).insert(
+			ignore_permissions=True
+		)
+		discussion = frappe.get_doc(
+			{
+				"doctype": "GP Discussion",
+				"project": project.name,
+				"title": "Need release checklist",
+				"content": "<p>Please prepare a release checklist.</p>",
+			}
+		).insert(ignore_permissions=True)
+
+		context = get_ai_handoff_context("GP Discussion", discussion.name)
+
+		self.assertEqual(context["assistant"]["mention"], "@OpenClaw")
+		self.assertEqual(context["schema"], "gameplan.ai_handoff.v1")
+		self.assertEqual(context["reference"]["doctype"], "GP Discussion")
+		self.assertEqual(context["reference"]["name"], str(discussion.name))
+		self.assertEqual(context["space"]["name"], str(project.name))
+		self.assertTrue(context["automation"]["requires_human_approval"])
+		self.assertIn("draft_development_handoff", context["capabilities"])
+		self.assertNotIn("execute_code", context["capabilities"])
+
 		frappe.db.rollback()

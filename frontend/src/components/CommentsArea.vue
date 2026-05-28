@@ -19,6 +19,7 @@
         </div>
       </div>
     </div>
+    <ErrorMessage class="px-1 py-2" :message="comments.error" />
     <div :style="{ paddingBottom: `${addCommentHeight + 80}px` }">
       <template v-for="(item, i) in timelineItems" :key="item.doctype + item.name">
         <div
@@ -123,8 +124,23 @@
               :discardButtonProps="{
                 onClick: discardComment,
               }"
+              :assistantActionProps="openClawAssistantActionProps"
               :editable="true"
               placeholder="Add a comment..."
+            />
+            <!-- NextAIPanel is rendered as a floating right-side drawer
+                 (teleported to body inside the component). The inline mount
+                 below the description box was removed because it crowded the
+                 composer and broke the slide-in pattern used in Helpdesk. -->
+            <NextAIPanel
+              v-if="aiPanelOpen"
+              :open="aiPanelOpen"
+              :surface="doctype === 'GP Task' ? 'gameplan_task' : 'gameplan'"
+              :reference-doctype="doctype"
+              :reference-name="name"
+              :get-parent-editor="getCommentEditor"
+              :on-insert="onInsertFromAI"
+              @update:open="(v) => (aiPanelOpen = v)"
             />
             <PollEditor
               v-show="newCommentType == 'Poll'"
@@ -137,6 +153,7 @@
                 onClick: discardPoll,
               }"
             />
+            <ErrorMessage :message="comments.insert.error" />
             <ErrorMessage :message="polls.insert.error" />
           </div>
         </div>
@@ -148,9 +165,10 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted, watch, useTemplateRef } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useList } from 'frappe-ui'
+import { useCall, useList } from 'frappe-ui'
 import { TabButtons, ErrorMessage } from 'frappe-ui'
 import CommentEditor from '@/components/CommentEditor.vue'
+import NextAIPanel from '@/components/openclaw/NextAIPanel.vue'
 import Comment from './Comment.vue'
 import Activity from './Activity.vue'
 import PollEditor from './PollEditor.vue'
@@ -163,6 +181,7 @@ import { GPActivity, GPComment, GPPoll } from '@/types/doctypes'
 import type { Editor } from '@tiptap/vue-3'
 import { tags } from '@/data/tags'
 import { isNewCommentOpen } from '@/data/newComment'
+import { useSessionUser } from '@/data/users'
 
 interface Props {
   doctype: string
@@ -179,6 +198,27 @@ interface NewPoll {
     title: string
     idx: number
   }>
+}
+
+interface AIHandoffContext {
+  assistant?: {
+    mention?: string
+  }
+  reference?: {
+    doctype?: string
+    name?: string
+    title?: string
+  }
+  discussion?: {
+    title?: string
+  }
+  space?: {
+    title?: string
+  }
+  automation?: {
+    requires_human_approval?: boolean
+  }
+  capabilities?: string[]
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -214,10 +254,10 @@ const newCommentEditor = useTemplateRef('newCommentEditor')
 const addComment = ref(null)
 let mutationObserver: MutationObserver | undefined
 const commentEditorKey = ref(0)
+const sessionUser = computed(() => useSessionUser())
 
 const comments = useList<GPComment>({
   doctype: 'GP Comment',
-  cacheKey: ['Comments', props.doctype, props.name],
   fields: [
     'name',
     'content',
@@ -226,15 +266,14 @@ const comments = useList<GPComment>({
     'modified',
     'edited_at',
     'deleted_at',
-    { reactions: ['name', 'user', 'emoji'] },
   ],
   transform(data) {
     return data.map((d) => ({ ...d, doctype: 'GP Comment' }))
   },
-  filters: {
+  filters: () => ({
     reference_doctype: props.doctype,
     reference_name: props.name,
-  },
+  }),
   orderBy: 'creation asc',
   limit: 99999,
   onSuccess() {
@@ -279,9 +318,6 @@ const polls = useList<GPPoll>({
     'creation',
     'owner',
     'stopped_at',
-    { options: ['name', 'title', 'idx', 'percentage'] },
-    { votes: ['user', 'option'] },
-    { reactions: ['name', 'user', 'emoji'] },
   ],
   filters: {
     discussion: props.name,
@@ -297,6 +333,12 @@ const polls = useList<GPPoll>({
       scrollToItem(poll)
     }
   },
+})
+
+const aiHandoff = useCall<AIHandoffContext>({
+  url: '/api/v2/method/gameplan.api.get_ai_handoff_context',
+  method: 'POST',
+  immediate: false,
 })
 
 // Computed
@@ -322,9 +364,66 @@ const editorObject = computed<Editor | null>(() => {
   return newCommentEditor.value?.editor || null
 })
 
+const isOpenClawHandoffEnabled = computed(() => {
+  return (window as any).openclaw_handoff_enabled !== false
+})
+
+const canUseOpenClawHandoff = computed(() => {
+  return (
+    props.doctype === 'GP Discussion' &&
+    isOpenClawHandoffEnabled.value &&
+    sessionUser.value.role !== 'Gameplan Guest'
+  )
+})
+
+const openClawHandoffActionProps = computed(() => {
+  if (!canUseOpenClawHandoff.value) return null
+  return {
+    label: '@OpenClaw',
+    iconLeft: 'lucide-sparkles',
+    variant: 'subtle',
+    loading: aiHandoff.loading,
+    onClick: insertOpenClawHandoff,
+  }
+})
+
+const aiPanelOpen = ref(false)
+
+function toggleAIPanel() {
+  aiPanelOpen.value = !aiPanelOpen.value
+}
+
+const openClawAssistantActionProps = computed(() => {
+  // For ANY doctype that supports it, show a single "Ask NextAI" button that
+  // toggles the inline AI panel below the composer. The panel streams a
+  // response and the user "Insert into editor" lands it in the CommentEditor.
+  if (sessionUser.value.role === 'Gameplan Guest') return null
+  return {
+    label: aiPanelOpen.value ? 'Hide NextAI' : 'Ask NextAI',
+    iconLeft: 'lucide-sparkles',
+    variant: 'subtle',
+    onClick: toggleAIPanel,
+  }
+})
+
+function getCommentEditor() {
+  return newCommentEditor.value?.editor || null
+}
+
+function onInsertFromAI(text: string) {
+  insertCommentDraft(text)
+}
+
+function openAIPanel() {
+  openCommentBox()
+  aiPanelOpen.value = true
+}
+
 defineExpose({
   editorObject,
   openCommentBox,
+  openAIPanel,
+  insertCommentDraft,
   scrollToCommentById,
   getCommentContentElement,
   highlightComment,
@@ -337,6 +436,22 @@ function draftCommentKey(): string {
 function openCommentBox() {
   showCommentBox.value = true
   newCommentType.value = 'Comment'
+}
+
+async function insertCommentDraft(content: string) {
+  if (!content) return
+  openCommentBox()
+  await nextTick()
+  const separator = commentEmpty.value ? '' : '<p></p>'
+  const html = `${separator}${escapeHtml(content).replace(/\n/g, '<br>')}`
+  const editor = editorObject.value
+
+  if (editor) {
+    editor.chain().focus().insertContent(html).run()
+    onNewCommentChange(editor.getHTML())
+  } else {
+    onNewCommentChange(`${newComment.value || ''}${html}`)
+  }
 }
 
 function getCommentContentElement(id) {
@@ -381,16 +496,19 @@ function resetCommentState() {
 async function submitComment() {
   if (commentEmpty.value) return
 
-  comments.insert
-    .submit({
-      reference_doctype: props.doctype,
-      reference_name: props.name,
-      content: newComment.value,
-    })
-    .then(() => {
-      resetCommentState()
-      tags.reload()
-    })
+  const insertedComment = await comments.insert.submit({
+    reference_doctype: props.doctype,
+    reference_name: props.name,
+    content: newComment.value,
+  })
+  if (comments.insert.error || !insertedComment) return
+
+  await comments.reload()
+  resetCommentState()
+  tags.reload()
+  await nextTick()
+  scrollToCommentById(insertedComment.name?.toString())
+  scrollToEnd()
 }
 
 async function scrollToEnd() {
@@ -487,6 +605,59 @@ function onNewCommentChange(content: string) {
   }, 0)
 }
 
+async function insertOpenClawHandoff() {
+  openCommentBox()
+  await nextTick()
+
+  let context: AIHandoffContext | null = null
+  try {
+    context = await aiHandoff.submit({
+      reference_doctype: props.doctype,
+      reference_name: props.name,
+    })
+  } catch {
+    context = null
+  }
+
+  const handoff = buildOpenClawHandoffComment(context)
+  const separator = commentEmpty.value ? '' : '<p></p>'
+  const html = `${separator}${handoff}`
+  const editor = editorObject.value
+
+  if (editor) {
+    editor.chain().focus().insertContent(html).run()
+    onNewCommentChange(editor.getHTML())
+  } else {
+    onNewCommentChange(`${newComment.value || ''}${html}`)
+  }
+}
+
+function buildOpenClawHandoffComment(context: AIHandoffContext | null) {
+  const mention = escapeHtml(context?.assistant?.mention || '@OpenClaw')
+  const title = escapeHtml(context?.discussion?.title || context?.reference?.title || 'this discussion')
+  const space = context?.space?.title ? ` in ${escapeHtml(context.space.title)}` : ''
+  const approval = context?.automation?.requires_human_approval !== false
+
+  return [
+    `<p><strong>${mention} handoff</strong></p>`,
+    `<p>Please review <strong>${title}</strong>${space} and draft a development handoff.</p>`,
+    '<ul>',
+    '<li><strong>Goal:</strong> Summarize the requested change and likely implementation path.</li>',
+    '<li><strong>Context:</strong> Call out relevant decisions, blockers, and open questions from this thread.</li>',
+    `<li><strong>Guardrail:</strong> ${approval ? 'Keep this as a draft for human approval before execution.' : 'Keep this as a visible suggestion before execution.'}</li>`,
+    '</ul>',
+  ].join('')
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 function discardComment() {
   if (!editorObject.value?.isEmpty) {
     createDialog({
@@ -520,6 +691,16 @@ watch(showCommentBox, (val) => {
     })
   }
 })
+
+watch(
+  () => [props.doctype, props.name, props.newCommentsFrom],
+  () => {
+    newMessagesFrom.value = props.newCommentsFrom
+    comments.reload()
+    activities.reload()
+    polls.reload()
+  },
+)
 
 onMounted(() => {
   if (!commentEmpty.value) {
