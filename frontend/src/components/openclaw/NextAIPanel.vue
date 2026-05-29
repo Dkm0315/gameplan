@@ -403,7 +403,10 @@ function initEditor() {
 }
 
 function buildMentionExtension(char: '/' | '@') {
-  return Mention.configure({
+  const MentionExtension = Mention.extend({
+    name: char === '/' ? 'ocSlashMention' : 'ocAgentMention',
+  })
+  return MentionExtension.configure({
     HTMLAttributes: { class: char === '/' ? 'oc-slash' : 'oc-agent' },
     suggestion: {
       char,
