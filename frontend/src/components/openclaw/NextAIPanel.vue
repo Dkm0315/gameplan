@@ -479,13 +479,23 @@ function buildItems(char: '/' | '@', query: string): SuggestionItem[] {
   if (char === '/') {
     const items = normalizeCommands(catalog.value?.commands)
     return items
-      .filter((it) => it.token.toLowerCase().includes(q) || (it.hint || '').toLowerCase().includes(q))
+      .filter((it) => safeText(it.token).toLowerCase().includes(q) || safeText(it.hint).toLowerCase().includes(q))
       .slice(0, 25)
   }
   const personas = normalizePersonas(catalog.value?.personas)
   return personas
-    .filter((it) => it.token.toLowerCase().includes(q) || (it.hint || '').toLowerCase().includes(q))
+    .filter((it) => safeText(it.token).toLowerCase().includes(q) || safeText(it.hint).toLowerCase().includes(q))
     .slice(0, 25)
+}
+
+function safeText(value: any): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (typeof value === 'object') {
+    return safeText(value.label || value.title || value.name || value.primary || value.description)
+  }
+  return ''
 }
 
 function commandGroup(command: any): string {
@@ -510,7 +520,7 @@ function normalizeCommands(commands: any): SuggestionItem[] {
       if (!slug) return null
       return {
         token: `/${slug}`,
-        hint: command?.description || command?.label || command?.display_name || 'OpenClaw command',
+        hint: safeText(command?.description || command?.label || command?.display_name || 'OpenClaw command'),
         group: commandGroup(command),
         payload: command,
       } as SuggestionItem
@@ -529,7 +539,7 @@ function personaGroup(persona: any): string {
 function normalizePersonas(personas: any): SuggestionItem[] {
   return Object.entries(personas || {}).map(([key, persona]: [string, any]) => ({
     token: `@${String(key).replace(/^@/, '')}`,
-    hint: persona?.description || persona?.label || 'OpenClaw specialist',
+    hint: safeText(persona?.description || persona?.label || 'OpenClaw specialist'),
     group: personaGroup(persona),
     payload: persona,
   })) as SuggestionItem[]
