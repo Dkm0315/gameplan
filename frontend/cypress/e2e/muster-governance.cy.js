@@ -142,6 +142,6 @@ describe('Muster governance workspace', () => {
     cy.contains('th', 'Tokens').should('be.visible')
     cy.get('a[href="/app/openclaw-ai-run/RUN-1"]').should('have.attr', 'target', '_blank')
     cy.contains('button', 'Open audit').should('be.visible')
-    cy.contains('Raw prompts are hidden.').should('be.visible')
+    cy.contains('Raw prompts are hidden.').scrollIntoView().should('be.visible')
   })
 })
