@@ -276,7 +276,7 @@ const navigation = computed(() => {
       isActive: testRoute(/Kanban/g),
     },
     {
-      name: 'NextAI',
+      name: 'Muster',
       icon: 'lucide-sparkles',
       route: {
         name: 'NextAI',

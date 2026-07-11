@@ -399,7 +399,7 @@ const openClawAssistantActionProps = computed(() => {
   // response and the user "Insert into editor" lands it in the CommentEditor.
   if (sessionUser.value.role === 'Gameplan Guest') return null
   return {
-    label: aiPanelOpen.value ? 'Hide NextAI' : 'Ask NextAI',
+    label: aiPanelOpen.value ? 'Hide Muster' : 'Ask Muster',
     iconLeft: 'lucide-sparkles',
     variant: 'subtle',
     onClick: toggleAIPanel,

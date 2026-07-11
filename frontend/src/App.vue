@@ -8,11 +8,11 @@
     </ScrollAreaRoot>
     <NewTaskDialog />
     <Dialogs />
-    <!-- Global floating sparkle launcher for NextAI; opens a workspace-scoped drawer. -->
+    <!-- Global Muster launcher; the dedicated workspace already owns the composer. -->
     <template v-if="$session.isLoggedIn">
-      <OpenClawLauncher :hidden="aiDrawerOpen" @toggle="aiDrawerOpen = !aiDrawerOpen" />
+      <OpenClawLauncher :hidden="aiDrawerOpen || isMusterWorkspace" @toggle="aiDrawerOpen = !aiDrawerOpen" />
       <NextAIPanel
-        v-if="aiDrawerOpen"
+        v-if="aiDrawerOpen && !isMusterWorkspace"
         :open="aiDrawerOpen"
         :surface="aiContext.surface"
         :reference-doctype="aiContext.referenceDoctype"
@@ -36,6 +36,7 @@ import OpenClawLauncher from './components/openclaw/OpenClawLauncher.vue'
 import NextAIPanel from './components/openclaw/NextAIPanel.vue'
 const aiDrawerOpen = ref(false)
 const route = useRoute()
+const isMusterWorkspace = computed(() => route.name === 'NextAI')
 
 const aiContext = computed(() => {
   if (['Task', 'SpaceTask'].includes(String(route.name)) && route.params.taskId) {

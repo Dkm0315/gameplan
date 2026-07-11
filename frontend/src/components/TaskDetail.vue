@@ -19,7 +19,7 @@
             v-model="task.doc.title"
             v-focus
           />
-          <Button label="Ask NextAI" variant="subtle" @click="openTaskAI">
+          <Button label="Ask Muster" variant="subtle" @click="openTaskAI">
             <template #prefix>
               <span class="lucide-sparkles h-4 w-4" />
             </template>
@@ -119,7 +119,7 @@
               <span class="lucide-sparkles h-4 w-4" />
             </div>
             <div class="min-w-0 flex-1">
-              <div class="text-sm font-medium text-ink-gray-8">NextAI task copilot</div>
+              <div class="text-sm font-medium text-ink-gray-8">Muster</div>
               <p class="mt-1 text-sm leading-5 text-ink-gray-5">
                 Ask questions, architect the work, plan code changes, or draft a task comment.
               </p>
