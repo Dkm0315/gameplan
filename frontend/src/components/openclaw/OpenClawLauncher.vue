@@ -21,7 +21,7 @@ import Sparkles from '~icons/lucide/sparkles'
 
 defineProps({
   hidden: { type: Boolean, default: false },
-  tooltip: { type: String, default: 'Ask NextAI' },
+  tooltip: { type: String, default: 'Ask Muster' },
 })
 const emit = defineEmits(['toggle'])
 </script>

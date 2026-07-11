@@ -1,5 +1,10 @@
 <template>
-  <div class="oc-suggestion-list rounded-xl border bg-surface-white shadow-lg overflow-hidden text-sm" :class="emptyClass">
+  <div
+    class="oc-suggestion-list overflow-y-auto rounded-lg border bg-surface-white text-sm shadow-lg"
+    :class="emptyClass"
+    role="listbox"
+    aria-label="Muster suggestions"
+  >
     <template v-if="hasItems">
       <div v-for="(group, gIdx) in groupedItems" :key="`g-${gIdx}-${group.label}`">
         <div
@@ -11,17 +16,20 @@
         <button
           v-for="item in group.items"
           :key="item.index"
+          :ref="(el) => setItemRef(el, item.index)"
           type="button"
-          class="oc-suggestion-item flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-surface-gray-2"
-          :class="item.index === selectedIndex ? 'bg-surface-gray-2' : ''"
+          class="oc-suggestion-item flex w-full items-start gap-2 px-3 py-2 text-left"
+          :class="item.index === selectedIndex ? 'oc-suggestion-item--selected' : ''"
+          role="option"
+          :aria-selected="item.index === selectedIndex"
           @mousedown.prevent="select(item.index)"
-          @mousemove="selectedIndex = item.index"
+          @mouseenter="selectByPointer(item.index)"
         >
           <span v-if="item.icon" class="mt-0.5 h-4 w-4 text-ink-gray-6" :class="item.icon" />
-          <span class="rounded bg-surface-gray-2 px-1.5 py-0.5 text-xs font-medium text-ink-gray-7">
+          <span class="oc-suggestion-token rounded px-1.5 py-0.5 text-xs font-medium">
             {{ item.token }}
           </span>
-          <span class="flex-1 text-xs leading-5 text-ink-gray-6">{{ item.hint }}</span>
+          <span class="oc-suggestion-hint min-w-0 flex-1 truncate text-xs leading-5">{{ item.hint }}</span>
         </button>
       </div>
     </template>
@@ -30,7 +38,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 
 export type SuggestionItem = {
   token: string
@@ -47,11 +55,13 @@ const props = defineProps<{
 }>()
 
 const selectedIndex = ref(0)
+const itemRefs = ref<Array<HTMLElement | null>>([])
 
 watch(
   () => props.items,
   () => {
     selectedIndex.value = 0
+    itemRefs.value = []
   },
 )
 
@@ -79,14 +89,28 @@ function select(idx: number) {
   if (item) props.command(item)
 }
 
+function setItemRef(el: any, idx: number) {
+  itemRefs.value[idx] = el instanceof HTMLElement ? el : el?.$el || null
+}
+
+function keepSelectionVisible() {
+  nextTick(() => itemRefs.value[selectedIndex.value]?.scrollIntoView({ block: 'nearest' }))
+}
+
+function selectByPointer(idx: number) {
+  selectedIndex.value = idx
+}
+
 function moveUp() {
   if (!props.items.length) return
   selectedIndex.value = (selectedIndex.value + props.items.length - 1) % props.items.length
+  keepSelectionVisible()
 }
 
 function moveDown() {
   if (!props.items.length) return
   selectedIndex.value = (selectedIndex.value + 1) % props.items.length
+  keepSelectionVisible()
 }
 
 function enter() {
@@ -104,8 +128,18 @@ function onKeyDown(event: KeyboardEvent) {
     moveDown()
     return true
   }
-  if (event.key === 'Enter') {
+  if (event.key === 'Enter' || event.key === 'Tab') {
     return enter()
+  }
+  if (event.key === 'Home' && props.items.length) {
+    selectedIndex.value = 0
+    keepSelectionVisible()
+    return true
+  }
+  if (event.key === 'End' && props.items.length) {
+    selectedIndex.value = props.items.length - 1
+    keepSelectionVisible()
+    return true
   }
   return false
 }
@@ -116,8 +150,32 @@ defineExpose({ onKeyDown, moveUp, moveDown, enter })
 <style scoped>
 .oc-suggestion-list {
   max-height: 280px;
-  overflow-y: auto;
   min-width: 280px;
-  max-width: 360px;
+  width: min(420px, calc(100vw - 32px));
+}
+.oc-suggestion-item {
+  color: var(--ink-gray-7, #374151);
+}
+.oc-suggestion-item:hover {
+  background: var(--surface-gray-1, #f9fafb);
+}
+.oc-suggestion-token {
+  background: var(--surface-gray-2, #f3f4f6);
+  color: var(--ink-gray-8, #1f2937);
+}
+.oc-suggestion-hint {
+  color: var(--ink-gray-6, #4b5563);
+}
+.oc-suggestion-item--selected,
+.oc-suggestion-item--selected:hover {
+  background: #0f766e;
+  color: #ffffff;
+}
+.oc-suggestion-item--selected .oc-suggestion-token {
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+.oc-suggestion-item--selected .oc-suggestion-hint {
+  color: rgba(255, 255, 255, 0.84);
 }
 </style>

@@ -103,7 +103,7 @@
                 <dd class="font-medium text-ink-gray-8">{{ yesNo(data.automation.requires_human_approval) }}</dd>
               </div>
               <div class="flex justify-between gap-3">
-                <dt class="text-ink-gray-5">Codex</dt>
+                <dt class="text-ink-gray-5">Provider runtime</dt>
                 <dd class="text-right font-medium text-ink-gray-8">{{ data.automation.codex_execution }}</dd>
               </div>
               <div class="flex justify-between gap-3">

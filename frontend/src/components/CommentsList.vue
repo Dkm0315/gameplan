@@ -140,7 +140,7 @@ const aiPanelOpen = ref(false)
 const newComment = ref(localStorage.getItem(draftCommentKey()) || '')
 
 const aiToggleActionProps = computed(() => ({
-  label: aiPanelOpen.value ? 'Hide NextAI' : 'Ask NextAI',
+  label: aiPanelOpen.value ? 'Hide Muster' : 'Ask Muster',
   iconLeft: 'lucide-sparkles',
   variant: 'subtle',
   onClick: () => {

@@ -1,7 +1,11 @@
 <template>
-  <Teleport to="body">
-  <transition name="oc-drawer">
-    <div v-if="open" class="oc-drawer-shell">
+  <Teleport to="body" :disabled="isWorkspace">
+  <transition :name="isWorkspace ? '' : 'oc-drawer'">
+    <section
+      v-if="open"
+      :class="isWorkspace ? 'oc-workspace-shell' : 'oc-drawer-shell'"
+      aria-label="Muster assistant"
+    >
       <div class="flex items-start justify-between gap-3 border-b px-4 py-2.5">
         <div class="min-w-0 flex items-center gap-2">
           <div class="rounded-md bg-surface-gray-2 p-1 text-ink-gray-8">
@@ -9,38 +13,64 @@
           </div>
           <div class="min-w-0">
             <div class="truncate text-sm font-semibold text-ink-gray-9">
-              NextAI
-              <span v-if="referenceLabel" class="ml-1 font-normal text-ink-gray-6">
+              Muster
+              <span v-if="referenceLabel && !isWorkspace" class="ml-1 font-normal text-ink-gray-6">
                 · {{ referenceLabel }}
               </span>
             </div>
-            <div class="truncate text-[11px] text-ink-gray-5">
-              Type <span class="font-medium text-ink-gray-7">/</span> for commands, <span class="font-medium text-ink-gray-7">@</span> for agents.
-            </div>
+            <div class="truncate text-[11px] text-ink-gray-5">{{ contextLine }}</div>
           </div>
         </div>
-        <button
-          type="button"
-          class="rounded-md p-1 text-ink-gray-5 hover:bg-surface-gray-2"
-          @click="emit('update:open', false)"
-        >
-          <span class="lucide-x h-4 w-4" />
-        </button>
+        <div class="flex items-center gap-1">
+          <span class="mr-1 inline-flex items-center gap-1.5 rounded-full border bg-surface-gray-1 px-2 py-1 text-[11px] text-ink-gray-6">
+            <span
+              class="h-1.5 w-1.5 rounded-full"
+              :class="state.running.value ? 'animate-pulse bg-amber-500' : 'bg-green-500'"
+            />
+            {{ state.running.value ? 'Working' : 'Ready' }}
+          </span>
+          <button
+            v-if="messages.length"
+            type="button"
+            aria-label="Clear conversation"
+            class="rounded-md px-2 py-1 text-[11px] text-ink-gray-6 hover:bg-surface-gray-2"
+            @click="clearConversation"
+          >
+            Clear
+          </button>
+          <button
+            v-if="!isWorkspace"
+            type="button"
+            aria-label="Close Muster"
+            class="rounded-md p-1 text-ink-gray-5 hover:bg-surface-gray-2"
+            @click="emit('update:open', false)"
+          >
+            <span class="lucide-x h-4 w-4" />
+          </button>
+        </div>
       </div>
+
+      <div class="oc-assistant-body flex min-h-0 flex-1 flex-col">
 
       <div
         v-if="gatewayConfigError"
         class="m-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"
       >
-        OpenClaw gateway is not configured for this site.
-        <a href="/app/openclaw-ai-settings" class="underline" target="_blank" rel="noopener">Open Site Config</a>.
+        Muster is not connected for this site.
+        <a href="/app/openclaw-ai-settings" class="underline" target="_blank" rel="noopener">Open integration settings</a>.
       </div>
 
       <div v-else-if="error" class="m-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
         {{ error }}
       </div>
 
-      <div v-if="messages.length || state.running.value" ref="threadRef" class="oc-thread space-y-3 border-b px-3 py-3">
+      <div
+        v-if="messages.length || state.running.value"
+        ref="threadRef"
+        class="oc-thread min-h-0 space-y-3 px-3 py-3"
+        role="log"
+        aria-live="polite"
+      >
         <template v-for="(msg, idx) in messages" :key="msg.id">
           <div v-if="msg.role === 'user'" class="flex justify-end">
             <div class="oc-user-bubble max-w-[85%] rounded-2xl rounded-br-sm px-3 py-2 text-sm leading-6 shadow-sm whitespace-pre-wrap">
@@ -57,9 +87,24 @@
             <div
               class="oc-rich-message max-w-[90%] rounded-2xl rounded-bl-sm border bg-surface-gray-1 px-3 py-2 text-sm leading-6 text-ink-gray-8 shadow-sm"
               :class="{ 'border-red-200 bg-red-50 text-red-700': msg.status === 'error' }"
-              v-html="renderMessageHtml(msg.content)"
-            />
-            <div v-if="msg.status === 'done' && msg.content && isLastAssistant(idx)" class="mt-1 flex gap-2 pl-1">
+            >
+              <div v-if="msg.status === 'streaming' && !msg.content" class="min-w-[8rem] space-y-2">
+                <div class="h-3 w-2/3 animate-pulse rounded bg-surface-gray-2" />
+                <div class="h-3 w-5/6 animate-pulse rounded bg-surface-gray-2" />
+                <div class="h-3 w-3/5 animate-pulse rounded bg-surface-gray-2" />
+              </div>
+              <span v-else v-html="renderMessageHtml(msg.content)" />
+            </div>
+            <div v-if="msg.status === 'streaming' && isLastAssistant(idx)" class="flex items-center gap-2 pl-1 text-xs text-ink-gray-6">
+              <span class="inline-flex gap-1">
+                <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-gray-4" />
+                <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-gray-4 [animation-delay:120ms]" />
+                <span class="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-gray-4 [animation-delay:240ms]" />
+              </span>
+              <span>{{ state.thinkingLine.value || 'Working...' }}</span>
+              <span v-if="state.elapsedSec.value > 5" class="text-ink-gray-5">({{ state.elapsedSec.value }}s)</span>
+            </div>
+            <div v-if="canInsert && msg.status === 'done' && msg.content && isLastAssistant(idx)" class="mt-1 flex gap-2 pl-1">
               <button type="button" class="rounded-md border px-2 py-1 text-[11px] hover:bg-surface-gray-2" @click="insertMessageIntoComposer(msg)">Insert into editor</button>
             </div>
           </div>
@@ -105,19 +150,28 @@
         </div>
       </div>
 
-      <div class="px-3 py-2">
-        <div ref="promptHostRef" class="oc-prompt-host relative">
-          <EditorContent
-            v-if="editor"
-            :editor="editor"
-            class="oc-prompt-editor prose-v3 max-w-none min-h-[3.5rem] max-h-[24vh] overflow-y-auto"
-          />
-          <div v-else class="px-2 py-2 text-xs text-ink-gray-5">Loading composer...</div>
+      <div v-else-if="!gatewayConfigError" class="oc-empty-state m-3 rounded-xl border border-dashed bg-surface-gray-1 px-4 py-5 text-center">
+        <div class="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-surface-white">
+          <span class="lucide-sparkles h-4 w-4 text-ink-gray-7" />
+        </div>
+        <div class="text-sm font-medium text-ink-gray-8">{{ emptyStateTitle }}</div>
+      </div>
 
+      <div class="oc-composer-shell bg-surface-white px-3 pb-3 pt-2">
+        <div class="oc-composer-frame">
+          <div ref="promptHostRef" class="oc-prompt-host relative">
+            <EditorContent
+              v-if="editor"
+              :editor="editor"
+              class="oc-prompt-editor prose-v3 max-w-none min-h-[3.25rem] max-h-[24vh] overflow-y-auto"
+            />
+            <div v-else class="px-3 py-3 text-xs text-ink-gray-5">Loading composer...</div>
+          </div>
+        <Teleport to="body">
           <div
             v-show="suggestionState.open"
             ref="suggestionFloatRef"
-            class="oc-suggestion-anchor absolute z-50"
+            class="oc-suggestion-anchor"
             :style="suggestionFloatStyle"
           >
             <NextAISuggestionList
@@ -127,22 +181,29 @@
               :command="onSuggestionPick"
             />
           </div>
-        </div>
+        </Teleport>
 
-        <div v-if="attachments.length" class="mt-2 flex flex-wrap gap-1.5">
-          <span
-            v-for="att in attachments"
-            :key="att.file_url || att.name"
-            class="inline-flex items-center gap-1 rounded-full bg-surface-gray-2 px-2 py-1 text-xs text-ink-gray-7"
-          >
-            <span class="lucide-paperclip h-3 w-3" />
-            {{ att.file_name || att.name }}
-            <button class="ml-1 text-ink-gray-5 hover:text-ink-red-3" @click="removeAttachment(att)">×</button>
-          </span>
-        </div>
+          <div v-if="attachments.length" class="oc-attachment-row flex flex-wrap gap-1.5 px-2.5 pb-1.5">
+            <span
+              v-for="att in attachments"
+              :key="att.file_url || att.name"
+              class="inline-flex min-w-0 max-w-full items-center gap-1 rounded-md bg-surface-gray-2 px-2 py-1 text-xs text-ink-gray-7"
+            >
+              <span class="lucide-paperclip h-3 w-3 shrink-0" />
+              <span class="truncate">{{ att.file_name || att.name }}</span>
+              <button
+                type="button"
+                class="ml-1 shrink-0 text-ink-gray-5 hover:text-ink-red-3"
+                :aria-label="`Remove ${att.file_name || att.name}`"
+                @click="removeAttachment(att)"
+              >
+                <span class="lucide-x h-3 w-3" />
+              </button>
+            </span>
+          </div>
 
-        <div class="mt-1 flex items-center justify-between">
-          <div class="flex items-center gap-2">
+          <div class="oc-composer-toolbar flex items-center justify-between border-t px-2 py-1.5">
+            <div class="flex items-center gap-1">
             <FileUploader
               :upload-args="{
                 doctype: referenceDoctype || 'User',
@@ -154,30 +215,46 @@
               <template #default="{ openFileSelector, uploading }">
                 <button
                   type="button"
-                  class="rounded-md px-2 py-1 text-xs font-medium text-ink-gray-6 hover:bg-surface-gray-2"
+                  class="oc-icon-button"
                   :disabled="uploading"
+                  :aria-label="uploading ? 'Uploading attachment' : 'Attach a file'"
+                  :title="uploading ? 'Uploading attachment' : 'Attach a file'"
                   @click="openFileSelector()"
                 >
-                  {{ uploading ? 'Uploading...' : 'Attach' }}
+                  <span v-if="uploading" class="lucide-loader-circle h-4 w-4 animate-spin" />
+                  <span v-else class="lucide-paperclip h-4 w-4" />
                 </button>
               </template>
             </FileUploader>
-            <span class="text-[11px] text-ink-gray-5">/ commands, @ agents. Enter to send, Shift+Enter newline.</span>
           </div>
-          <div class="flex gap-2">
-            <button type="button" class="rounded-md border px-2.5 py-1 text-xs hover:bg-surface-gray-2" @click="clearPrompt">Clear</button>
+            <div class="flex items-center gap-1">
+            <button
+              v-if="promptText || attachments.length"
+              type="button"
+              class="oc-icon-button"
+              aria-label="Clear prompt"
+              title="Clear prompt"
+              @click="clearPrompt"
+            >
+              <span class="lucide-eraser h-4 w-4" />
+            </button>
             <button
               type="button"
-              class="rounded-md bg-ink-gray-8 px-2.5 py-1 text-xs text-surface-white hover:bg-ink-gray-9 disabled:opacity-50"
+              class="oc-send-button"
               :disabled="!canSend"
+              :aria-label="state.running.value ? 'Muster is working' : 'Send message'"
+              :title="state.running.value ? 'Muster is working' : 'Send message'"
               @click="submit"
             >
-              {{ state.running.value ? 'Working...' : 'Send' }}
+              <span v-if="state.running.value" class="lucide-loader-circle h-4 w-4 animate-spin" />
+              <span v-else class="lucide-send h-4 w-4" />
             </button>
+          </div>
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </section>
   </transition>
   </Teleport>
 </template>
@@ -210,15 +287,19 @@ type ParentEditor = {
   isEmpty?: boolean
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   open: boolean
   surface: string
+  layout?: 'drawer' | 'workspace'
+  contextLabel?: string
   referenceDoctype?: string
   referenceName?: string
   getParentEditor?: () => ParentEditor | null | undefined
   onInsert?: (text: string) => void
   initialPrompt?: string
-}>()
+}>(), {
+  layout: 'drawer',
+})
 
 const emit = defineEmits<{
   (e: 'update:open', value: boolean): void
@@ -230,6 +311,8 @@ const error = ref('')
 const gatewayConfigError = ref(false)
 const catalog = ref<any>(null)
 const currentRun = ref<string>('')
+const promptText = ref(props.initialPrompt || '')
+const activeAgentId = ref<string | null>(null)
 
 const steerOpen = ref(false)
 const modifyOpen = ref(false)
@@ -237,6 +320,18 @@ const steerText = ref('')
 const modifyText = ref('')
 
 const { state, start, stop, steer, modify, cleanup } = useStreamingRun()
+const isWorkspace = computed(() => props.layout === 'workspace')
+const canInsert = computed(() => !isWorkspace.value && Boolean(props.getParentEditor || props.onInsert))
+const selectedAgentId = computed(() => inferPersona(promptText.value) || activeAgentId.value)
+const contextLine = computed(() => {
+  const context = props.contextLabel || referenceLabel.value || 'Agent workspace'
+  return selectedAgentId.value ? `@${selectedAgentId.value} · ${context}` : context
+})
+const emptyStateTitle = computed(() => {
+  if (/discussion|comment/i.test(props.surface)) return 'What should Muster do with this discussion?'
+  if (/task/i.test(props.surface)) return 'What should Muster do with this task?'
+  return 'What do you want to work on?'
+})
 
 type ChatMessage = {
   id: string
@@ -281,15 +376,42 @@ const suggestionState = ref<SuggestionState>({
   clientRect: null,
 })
 
-const suggestionFloatStyle = computed(() => {
-  const rect = suggestionState.value.clientRect ? suggestionState.value.clientRect() : null
-  const host = promptHostRef.value
-  if (!rect || !host) return { top: '100%', left: '0' }
-  const hostRect = host.getBoundingClientRect()
-  const top = rect.bottom - hostRect.top + 6
-  const left = Math.max(0, rect.left - hostRect.left)
-  return { top: `${top}px`, left: `${left}px` }
+const suggestionFloatStyle = ref<Record<string, string>>({
+  position: 'fixed',
+  top: '0px',
+  left: '0px',
+  zIndex: '100',
+  pointerEvents: 'none',
 })
+
+function recomputeSuggestionFloat() {
+  const rect = suggestionState.value.clientRect ? suggestionState.value.clientRect() : null
+  if (!rect) return
+  const menuEl = suggestionListRef.value?.$el as HTMLElement | undefined
+  const menuRect = menuEl?.getBoundingClientRect?.()
+  const menuHeight = menuRect?.height || 240
+  const menuWidth = menuRect?.width || 360
+  const margin = 16
+  const spaceBelow = window.innerHeight - rect.bottom - margin
+  const spaceAbove = rect.top - margin
+  const flipAbove = menuHeight > spaceBelow && spaceAbove > spaceBelow
+
+  let top = flipAbove ? rect.top - menuHeight - 6 : rect.bottom + 6
+  top = Math.max(margin, Math.min(top, window.innerHeight - menuHeight - margin))
+
+  let left = rect.left
+  const maxLeft = window.innerWidth - menuWidth - margin
+  if (maxLeft > 0 && left > maxLeft) left = maxLeft
+  if (left < margin) left = margin
+
+  suggestionFloatStyle.value = {
+    position: 'fixed',
+    top: `${top}px`,
+    left: `${left}px`,
+    zIndex: '100',
+    pointerEvents: 'none',
+  }
+}
 
 const editor = ref<Editor | null>(null)
 
@@ -346,13 +468,41 @@ onMounted(() => {
   initEditor()
   loadCatalog()
   loadHistory()
+  window.addEventListener('scroll', onSuggestionViewportChange, { passive: true, capture: true })
+  window.addEventListener('resize', onSuggestionViewportChange, { passive: true })
+  document.addEventListener('pointerdown', onDocumentPointerDown, true)
 })
 
 onBeforeUnmount(() => {
   cleanup()
   editor.value?.destroy?.()
   editor.value = null
+  window.removeEventListener('scroll', onSuggestionViewportChange, true)
+  window.removeEventListener('resize', onSuggestionViewportChange)
+  document.removeEventListener('pointerdown', onDocumentPointerDown, true)
 })
+
+watch(
+  () => [suggestionState.value.open, suggestionState.value.items.length],
+  () => {
+    if (!suggestionState.value.open) return
+    nextTick(() => recomputeSuggestionFloat())
+  },
+)
+
+function onSuggestionViewportChange() {
+  if (suggestionState.value.open) recomputeSuggestionFloat()
+}
+
+function onDocumentPointerDown(event: PointerEvent) {
+  if (!suggestionState.value.open) return
+  const target = event.target as Node | null
+  const menuEl = suggestionFloatRef.value
+  if (menuEl && target && menuEl.contains(target)) return
+  const hostEl = promptHostRef.value
+  if (hostEl && target && hostEl.contains(target)) return
+  closeSuggestion()
+}
 
 function initEditor() {
   editor.value = new Editor({
@@ -399,6 +549,9 @@ function initEditor() {
         return false
       },
     },
+    onUpdate: ({ editor: currentEditor }) => {
+      promptText.value = currentEditor.getText()
+    },
   })
 }
 
@@ -421,11 +574,13 @@ function buildMentionExtension(char: '/' | '@') {
             query: cmdProps.query || '',
             items: buildItems(char, cmdProps.query || ''),
             command: (item) => {
-              cmdProps.command({ id: item.token, label: item.token })
+              const token = item.token.replace(/^[/@]/, '')
+              cmdProps.command({ id: token, label: token })
               closeSuggestion()
             },
             clientRect: cmdProps.clientRect,
           }
+          nextTick(() => recomputeSuggestionFloat())
         },
         onUpdate: (cmdProps: any) => {
           suggestionState.value = {
@@ -433,11 +588,13 @@ function buildMentionExtension(char: '/' | '@') {
             query: cmdProps.query || '',
             items: buildItems(char, cmdProps.query || ''),
             command: (item) => {
-              cmdProps.command({ id: item.token, label: item.token })
+              const token = item.token.replace(/^[/@]/, '')
+              cmdProps.command({ id: token, label: token })
               closeSuggestion()
             },
             clientRect: cmdProps.clientRect,
           }
+          nextTick(() => recomputeSuggestionFloat())
         },
         onKeyDown: (cmdProps: any) => {
           if (cmdProps.event.key === 'Escape') {
@@ -502,7 +659,7 @@ function commandGroup(command: any): string {
   if (command?.primary) return 'This page'
   const source = String(command?.source || '')
   if (source.includes('codex') || source.includes('gateway') || source.includes('tool')) {
-    return 'More OpenClaw / Codex'
+    return 'Muster tools'
   }
   if (source.includes('doctype')) return 'Configured'
   return 'Commands'
@@ -520,7 +677,7 @@ function normalizeCommands(commands: any): SuggestionItem[] {
       if (!slug) return null
       return {
         token: `/${slug}`,
-        hint: safeText(command?.description || command?.label || command?.display_name || 'OpenClaw command'),
+        hint: safeText(command?.description || command?.label || command?.display_name || 'Muster command'),
         group: commandGroup(command),
         payload: command,
       } as SuggestionItem
@@ -531,7 +688,7 @@ function normalizeCommands(commands: any): SuggestionItem[] {
 function personaGroup(persona: any): string {
   if (persona?.primary) return 'This page'
   const source = String(persona?.source || '')
-  if (source.includes('codex') || source.includes('gateway')) return 'More OpenClaw / Codex'
+  if (source.includes('codex') || source.includes('gateway')) return 'Muster agents'
   if (source.includes('doctype')) return 'Configured agents'
   return 'Agents'
 }
@@ -539,7 +696,7 @@ function personaGroup(persona: any): string {
 function normalizePersonas(personas: any): SuggestionItem[] {
   return Object.entries(personas || {}).map(([key, persona]: [string, any]) => ({
     token: `@${String(key).replace(/^@/, '')}`,
-    hint: safeText(persona?.description || persona?.label || 'OpenClaw specialist'),
+    hint: safeText(persona?.description || persona?.label || 'Muster specialist'),
     group: personaGroup(persona),
     payload: persona,
   })) as SuggestionItem[]
@@ -598,6 +755,9 @@ async function loadHistory() {
     }
     if (restored.length && !messages.value.length) {
       messages.value = restored
+      activeAgentId.value = [...(result?.turns || [])]
+        .reverse()
+        .find((turn: any) => turn?.persona)?.persona || null
       scrollThreadToBottom()
     }
   } catch {
@@ -612,6 +772,8 @@ function isGatewayConfigError(err: any): boolean {
 
 function clearPrompt() {
   editor.value?.commands.clearContent(true)
+  promptText.value = ''
+  attachments.value = []
 }
 
 function discardOutput() {
@@ -626,6 +788,13 @@ function discardOutput() {
   error.value = ''
 }
 
+function clearConversation() {
+  discardOutput()
+  pendingRunName.value = ''
+  messages.value = []
+  activeAgentId.value = null
+}
+
 watch(
   () => [props.open, props.referenceDoctype, props.referenceName, props.surface],
   ([isOpen], [_oldOpen, oldDt, oldName, oldSurface]) => {
@@ -633,6 +802,7 @@ watch(
     if (oldDt !== props.referenceDoctype || oldName !== props.referenceName || oldSurface !== props.surface) {
       messages.value = []
       discardOutput()
+      activeAgentId.value = null
     }
     loadCatalog()
     loadHistory()
@@ -694,12 +864,14 @@ function inferIntent(text: string): string {
 }
 
 function inferPersona(text: string): string | null {
-  return text.match(/@([a-z0-9][a-z0-9-]*)/i)?.[1]?.replace(/-/g, '_') || null
+  return text.match(/@([a-z0-9][a-z0-9-]*)/i)?.[1]?.toLowerCase() || null
 }
 
 async function submit() {
   const text = getPromptText()
   if (!text || state.running.value) return
+  const requestedAgentId = inferPersona(text) || activeAgentId.value
+  activeAgentId.value = requestedAgentId
 
   error.value = ''
   gatewayConfigError.value = false
@@ -724,7 +896,7 @@ async function submit() {
       source_doctype: props.referenceDoctype,
       source_name: props.referenceName,
       surface: props.surface,
-      persona: inferPersona(text) || undefined,
+      persona: requestedAgentId || undefined,
       session_key: sessionKey,
       payload: {
         attachments: attachments.value.map((file) => ({
@@ -739,7 +911,7 @@ async function submit() {
     if (isGatewayConfigError(err)) {
       gatewayConfigError.value = true
     } else {
-      error.value = err?.messages?.[0] || err?.message || 'Could not start NextAI run.'
+      error.value = err?.messages?.[0] || err?.message || 'Could not start the Muster run.'
       toast.error(error.value)
       messages.value.push({ id: makeMessageId(), role: 'system', content: error.value })
       scrollThreadToBottom()
@@ -836,7 +1008,7 @@ function textToHtml(text: string): string {
 }
 
 function renderMessageHtml(value: string): string {
-  const escaped = escapeHtml(value || '')
+  const escaped = escapeHtml(publicMessage(value))
   const withMarkdownLinks = escaped.replace(
     /\[([^\]]+)\]\((\/files\/[^)\s]+|https?:\/\/[^)\s]+)\)/g,
     (_match, label, href) =>
@@ -848,6 +1020,16 @@ function renderMessageHtml(value: string): string {
       `${prefix}<a href="${href}" target="_blank" rel="noopener" class="oc-message-link">${href}</a>`,
   )
   return withBarePublicFiles.replace(/\n/g, '<br>')
+}
+
+function publicMessage(value: string): string {
+  return String(value || '')
+    .replace(
+      /OpenClaw gateway(?: stream)? at \S+ exceeded (\d+)s wall-clock budget\.?/gi,
+      'The agent run timed out after $1 seconds. Try again or check the site connection.',
+    )
+    .replace(/OpenClaw/gi, 'Muster')
+    .replace(/NextAI/gi, 'Muster')
 }
 
 function humanize(name: string): string {
@@ -893,12 +1075,36 @@ watch(
   flex-direction: column;
   overflow: hidden;
 }
+.oc-workspace-shell {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  background: var(--surface-white, #ffffff);
+  border: 1px solid var(--surface-gray-3, #e5e7eb);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.oc-assistant-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.oc-empty-state {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 12rem;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
 @media (max-width: 640px) {
   .oc-drawer-shell { left: 0; right: 0; top: 0; bottom: 0; border-radius: 0; }
 }
 .oc-prompt-editor {
-  padding: 0.5rem 0.5rem;
+  padding: 0.75rem 0.75rem 0.5rem;
   outline: none;
+  line-height: 1.5rem;
 }
 .oc-prompt-editor :deep(.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);
@@ -920,9 +1126,64 @@ watch(
   display: inline;
 }
 .oc-thread {
-  max-height: 50vh;
+  flex: 1 1 auto;
+  max-height: none;
+  min-height: 0;
   overflow-y: auto;
   scroll-behavior: smooth;
+}
+.oc-composer-shell {
+  flex: 0 0 auto;
+}
+.oc-composer-frame {
+  overflow: hidden;
+  border: 1px solid var(--surface-gray-4, #d1d5db);
+  border-radius: 8px;
+  background: var(--surface-white, #ffffff);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+.oc-composer-frame:focus-within {
+  border-color: #0f766e;
+  box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.12);
+}
+.oc-composer-toolbar {
+  border-color: var(--surface-gray-2, #f3f4f6);
+}
+.oc-icon-button,
+.oc-send-button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  flex: 0 0 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+.oc-icon-button {
+  color: var(--ink-gray-6, #4b5563);
+}
+.oc-icon-button:hover:not(:disabled) {
+  background: var(--surface-gray-2, #f3f4f6);
+  color: var(--ink-gray-9, #111827);
+}
+.oc-send-button {
+  background: #0f766e;
+  color: #ffffff;
+}
+.oc-send-button:hover:not(:disabled) {
+  background: #115e59;
+}
+.oc-icon-button:disabled,
+.oc-send-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+.oc-suggestion-anchor {
+  pointer-events: none;
+}
+.oc-suggestion-anchor > * {
+  pointer-events: auto;
 }
 .oc-user-bubble {
   background: #111827;

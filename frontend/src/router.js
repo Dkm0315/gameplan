@@ -65,8 +65,8 @@ let router = createRouter({
     },
     {
       name: 'NextAI',
-      path: '/nextai',
-      alias: ['/ai'],
+      path: '/muster',
+      alias: ['/nextai', '/ai'],
       component: () => import('@/pages/NextAIWorkspace.vue'),
     },
     {

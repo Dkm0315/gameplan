@@ -50,7 +50,7 @@
                 <template #prefix>
                   <span class="lucide-sparkles h-4 w-4" />
                 </template>
-                Ask NextAI
+                Ask Muster
               </Button>
               <Dropdown
                 v-if="!readOnlyMode"
