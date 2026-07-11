@@ -56,7 +56,7 @@ class TestGPDiscussion(FrappeTestCase):
 
 		context = get_ai_handoff_context("GP Discussion", discussion.name)
 
-		self.assertEqual(context["assistant"]["mention"], "@OpenClaw")
+		self.assertEqual(context["assistant"]["mention"], "@Muster")
 		self.assertEqual(context["schema"], "gameplan.ai_handoff.v1")
 		self.assertEqual(context["reference"]["doctype"], "GP Discussion")
 		self.assertEqual(context["reference"]["name"], str(discussion.name))

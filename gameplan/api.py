@@ -463,7 +463,7 @@ def get_space_operations(space_id: str):
 
 @frappe.whitelist()
 def get_ai_handoff_context(reference_doctype: str, reference_name: str):
-	"""Return read-only context for a human-authored OpenClaw handoff.
+	"""Return read-only context for a human-authored Muster handoff.
 
 	This deliberately does not execute work or create downstream tasks. The
 	payload is a small, versioned contract that UI and external agents can use
@@ -494,8 +494,8 @@ def get_ai_handoff_context(reference_doctype: str, reference_name: str):
 	return {
 		"schema": "gameplan.ai_handoff.v1",
 		"assistant": {
-			"name": "OpenClaw",
-			"mention": "@OpenClaw",
+			"name": "Muster",
+			"mention": "@Muster",
 			"mode": "human_visible_handoff",
 		},
 		"feature_flag": {

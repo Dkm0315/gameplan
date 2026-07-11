@@ -64,6 +64,56 @@
         {{ error }}
       </div>
 
+      <section
+        v-if="isWorkspace && controlTabs.length"
+        class="oc-control-center"
+        data-testid="muster-control-center"
+        :data-access-tier="accessTier"
+        aria-label="Muster controls"
+      >
+        <div class="oc-control-center-header">
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-ink-gray-8">Muster controls</div>
+            <div class="truncate text-[11px] text-ink-gray-5">{{ controlCenterSummary }}</div>
+          </div>
+          <span class="oc-access-badge">{{ accessTierLabel }}</span>
+        </div>
+        <div class="oc-control-tabs" role="tablist" aria-label="Control group">
+          <button
+            v-for="tab in controlTabs"
+            :key="tab.id"
+            type="button"
+            role="tab"
+            :data-testid="`muster-control-tab-${tab.id}`"
+            :aria-selected="activeControlGroup === tab.id"
+            :class="{ 'is-active': activeControlGroup === tab.id }"
+            @click="selectControlGroup(tab.id)"
+          >
+            <component :is="tab.icon" class="h-3.5 w-3.5" aria-hidden="true" />
+            <span>{{ tab.label }}</span>
+            <small>{{ tab.actions.length }}</small>
+          </button>
+        </div>
+        <div class="oc-control-actions" role="tabpanel">
+          <button
+            v-for="action in activeControlActions"
+            :key="action.token"
+            type="button"
+            :data-testid="`muster-command-${action.token.slice(1)}`"
+            :title="action.hint"
+            :disabled="state.running.value"
+            @click="runCommand(action.token)"
+          >
+            <component :is="activeControlIcon" class="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span class="min-w-0">
+              <strong>{{ action.label || humanize(action.token) }}</strong>
+              <small>{{ action.token }}</small>
+            </span>
+            <span class="lucide-arrow-right h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          </button>
+        </div>
+      </section>
+
       <div
         v-if="messages.length || state.running.value"
         ref="threadRef"
@@ -84,7 +134,14 @@
             />
           </div>
           <div v-else class="flex flex-col items-start gap-1.5">
+            <NextAIPresentation
+              v-if="msg.presentation"
+              class="max-w-full"
+              :presentation="msg.presentation"
+              @action="runCommand"
+            />
             <div
+              v-else
               class="oc-rich-message max-w-[90%] rounded-2xl rounded-bl-sm border bg-surface-gray-1 px-3 py-2 text-sm leading-6 text-ink-gray-8 shadow-sm"
               :class="{ 'border-red-200 bg-red-50 text-red-700': msg.status === 'error' }"
             >
@@ -179,6 +236,8 @@
               v-if="suggestionState.open"
               :items="suggestionState.items"
               :command="onSuggestionPick"
+              :loading="catalogLoading"
+              :empty-label="suggestionEmptyLabel"
             />
           </div>
         </Teleport>
@@ -267,7 +326,11 @@ import { Placeholder } from '@tiptap/extensions'
 import Mention from '@tiptap/extension-mention'
 import { PluginKey } from '@tiptap/pm/state'
 import { FileUploader, toast } from 'frappe-ui'
+import LucideShieldCheck from '~icons/lucide/shield-check'
+import LucideUserRound from '~icons/lucide/user-round'
+import LucideWorkflow from '~icons/lucide/workflow'
 import NextAISuggestionList, { type SuggestionItem } from './NextAISuggestionList.vue'
+import NextAIPresentation from './NextAIPresentation.vue'
 import {
   getCommandCatalog,
   getRunHistory,
@@ -310,6 +373,8 @@ const attachments = ref<any[]>([])
 const error = ref('')
 const gatewayConfigError = ref(false)
 const catalog = ref<any>(null)
+const catalogLoading = ref(false)
+const catalogError = ref('')
 const currentRun = ref<string>('')
 const promptText = ref(props.initialPrompt || '')
 const activeAgentId = ref<string | null>(null)
@@ -323,6 +388,73 @@ const { state, start, stop, steer, modify, cleanup } = useStreamingRun()
 const isWorkspace = computed(() => props.layout === 'workspace')
 const canInsert = computed(() => !isWorkspace.value && Boolean(props.getParentEditor || props.onInsert))
 const selectedAgentId = computed(() => inferPersona(promptText.value) || activeAgentId.value)
+type ControlGroupId = 'personal' | 'governance' | 'runtime'
+type ControlTab = {
+  id: ControlGroupId
+  label: string
+  icon: any
+  commandNames: string[]
+  actions: SuggestionItem[]
+}
+const activeControlGroup = ref<ControlGroupId>('personal')
+const controlGroupTouched = ref(false)
+const controlGroupDefinitions: Array<Omit<ControlTab, 'actions'>> = [
+  {
+    id: 'personal',
+    label: 'Personal',
+    icon: LucideUserRound,
+    commandNames: ['my-tickets', 'unassigned', 'open-tickets', 'tokens', 'usage', 'memory', 'sessions', 'artifacts'],
+  },
+  {
+    id: 'governance',
+    label: 'Governance',
+    icon: LucideShieldCheck,
+    commandNames: [
+      'reports', 'limits', 'audit', 'security', 'evals', 'approvals', 'incidents',
+      'change-scan', 'test-plan', 'validate', 'validation-status', 'release-evidence',
+      'documentation-status', 'documentation-impact', 'documentation-update', 'runbooks',
+    ],
+  },
+  {
+    id: 'runtime',
+    label: 'Runtime',
+    icon: LucideWorkflow,
+    commandNames: ['status', 'providers', 'models', 'tools', 'skills', 'plugins', 'mcp', 'channels', 'agents', 'settings'],
+  },
+]
+const accessTier = computed(() => String(catalog.value?.context?.access_tier || 'user'))
+const isGovernanceUser = computed(() => ['permission_manager', 'admin'].includes(accessTier.value))
+const controlTabs = computed<ControlTab[]>(() => {
+  const commands = normalizeCommands(catalog.value?.commands)
+  return controlGroupDefinitions
+    .filter((group) => group.id !== 'governance' || isGovernanceUser.value)
+    .map((group) => ({
+      ...group,
+      actions: group.commandNames
+        .map((name) => commands.find((command) => command.token === `/${name}`))
+        .filter(Boolean) as SuggestionItem[],
+    }))
+    .filter((group) => group.actions.length)
+})
+const activeControlTab = computed(() =>
+  controlTabs.value.find((tab) => tab.id === activeControlGroup.value) || controlTabs.value[0],
+)
+const activeControlActions = computed(() => activeControlTab.value?.actions || [])
+const activeControlIcon = computed(() => activeControlTab.value?.icon || LucideWorkflow)
+const accessTierLabel = computed(() => {
+  const labels: Record<string, string> = {
+    permission_manager: 'Permission manager',
+    admin: 'Administrator',
+    power_user: 'Power user',
+    user: 'Personal',
+  }
+  return labels[accessTier.value] || 'Personal'
+})
+const controlCenterSummary = computed(() => {
+  if (activeControlGroup.value === 'governance') return 'Usage, limits, audit, security, evals, validation, and documentation'
+  if (activeControlGroup.value === 'runtime') return 'Providers, models, tools, extensions, channels, and agents'
+  return 'Your tickets, token ledger, memory, sessions, and artifacts'
+})
 const contextLine = computed(() => {
   const context = props.contextLabel || referenceLabel.value || 'Agent workspace'
   return selectedAgentId.value ? `@${selectedAgentId.value} · ${context}` : context
@@ -333,12 +465,18 @@ const emptyStateTitle = computed(() => {
   return 'What do you want to work on?'
 })
 
+function selectControlGroup(group: ControlGroupId) {
+  controlGroupTouched.value = true
+  activeControlGroup.value = group
+}
+
 type ChatMessage = {
   id: string
   role: 'user' | 'assistant' | 'system'
   content: string
   status?: 'streaming' | 'done' | 'error'
   runName?: string
+  presentation?: any
 }
 
 const messages = ref<ChatMessage[]>([])
@@ -375,6 +513,10 @@ const suggestionState = ref<SuggestionState>({
   command: null,
   clientRect: null,
 })
+const suggestionEmptyLabel = computed(() => {
+  if (catalogError.value) return 'Commands are temporarily unavailable'
+  return suggestionState.value.type === '@' ? 'No matching agents' : 'No matching commands'
+})
 
 const suggestionFloatStyle = ref<Record<string, string>>({
   position: 'fixed',
@@ -387,11 +529,13 @@ const suggestionFloatStyle = ref<Record<string, string>>({
 function recomputeSuggestionFloat() {
   const rect = suggestionState.value.clientRect ? suggestionState.value.clientRect() : null
   if (!rect) return
+  const hostRect = promptHostRef.value?.getBoundingClientRect?.()
   const menuEl = suggestionListRef.value?.$el as HTMLElement | undefined
   const menuRect = menuEl?.getBoundingClientRect?.()
   const menuHeight = menuRect?.height || 240
-  const menuWidth = menuRect?.width || 360
   const margin = 16
+  const availableWidth = Math.max(280, window.innerWidth - margin * 2)
+  const menuWidth = Math.min(560, availableWidth, Math.max(320, hostRect?.width || menuRect?.width || 320))
   const spaceBelow = window.innerHeight - rect.bottom - margin
   const spaceAbove = rect.top - margin
   const flipAbove = menuHeight > spaceBelow && spaceAbove > spaceBelow
@@ -399,7 +543,7 @@ function recomputeSuggestionFloat() {
   let top = flipAbove ? rect.top - menuHeight - 6 : rect.bottom + 6
   top = Math.max(margin, Math.min(top, window.innerHeight - menuHeight - margin))
 
-  let left = rect.left
+  let left = hostRect?.left ?? rect.left
   const maxLeft = window.innerWidth - menuWidth - margin
   if (maxLeft > 0 && left > maxLeft) left = maxLeft
   if (left < margin) left = margin
@@ -408,6 +552,7 @@ function recomputeSuggestionFloat() {
     position: 'fixed',
     top: `${top}px`,
     left: `${left}px`,
+    width: `${menuWidth}px`,
     zIndex: '100',
     pointerEvents: 'none',
   }
@@ -529,7 +674,7 @@ function initEditor() {
     editorProps: {
       handleKeyDown: (_view, event) => {
         if (suggestionState.value.open && suggestionListRef.value) {
-          if (['ArrowUp', 'ArrowDown', 'Enter', 'Tab'].includes(event.key)) {
+          if (['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', 'Enter', 'Tab'].includes(event.key)) {
             const handled = suggestionListRef.value.onKeyDown(event)
             if (handled) {
               event.preventDefault()
@@ -634,15 +779,15 @@ function onSuggestionPick(item: SuggestionItem) {
 function buildItems(char: '/' | '@', query: string): SuggestionItem[] {
   const q = (query || '').toLowerCase()
   if (char === '/') {
-    const items = normalizeCommands(catalog.value?.commands)
+    const items = normalizeCommands(catalog.value?.commands).sort(commandSuggestionSort)
     return items
       .filter((it) => safeText(it.token).toLowerCase().includes(q) || safeText(it.hint).toLowerCase().includes(q))
-      .slice(0, 25)
+      .slice(0, 80)
   }
   const personas = normalizePersonas(catalog.value?.personas)
   return personas
     .filter((it) => safeText(it.token).toLowerCase().includes(q) || safeText(it.hint).toLowerCase().includes(q))
-    .slice(0, 25)
+    .slice(0, 40)
 }
 
 function safeText(value: any): string {
@@ -658,11 +803,26 @@ function safeText(value: any): string {
 function commandGroup(command: any): string {
   if (command?.primary) return 'This page'
   const source = String(command?.source || '')
+  if (source.includes('muster_builtin')) return 'Muster controls'
+  if (source.includes('muster_custom')) return 'Configured workflows'
   if (source.includes('codex') || source.includes('gateway') || source.includes('tool')) {
     return 'Muster tools'
   }
   if (source.includes('doctype')) return 'Configured'
   return 'Commands'
+}
+
+function commandSuggestionSort(left: SuggestionItem, right: SuggestionItem): number {
+  const order: Record<string, number> = {
+    'This page': 0,
+    'Muster controls': 1,
+    'Configured workflows': 2,
+    'Muster tools': 3,
+    Configured: 4,
+    Commands: 5,
+  }
+  const groupDelta = (order[left.group || 'Commands'] ?? 9) - (order[right.group || 'Commands'] ?? 9)
+  return groupDelta || left.token.localeCompare(right.token)
 }
 
 function normalizeCommands(commands: any): SuggestionItem[] {
@@ -677,6 +837,7 @@ function normalizeCommands(commands: any): SuggestionItem[] {
       if (!slug) return null
       return {
         token: `/${slug}`,
+        label: safeText(command?.label || command?.display_name || name.replace(/[-_]/g, ' ')),
         hint: safeText(command?.description || command?.label || command?.display_name || 'Muster command'),
         group: commandGroup(command),
         payload: command,
@@ -703,6 +864,8 @@ function normalizePersonas(personas: any): SuggestionItem[] {
 }
 
 async function loadCatalog() {
+  catalogLoading.value = true
+  catalogError.value = ''
   try {
     const result = await getCommandCatalog({
       source_doctype: props.referenceDoctype,
@@ -710,11 +873,25 @@ async function loadCatalog() {
       surface: props.surface,
     })
     catalog.value = result
+    if (!controlGroupTouched.value) {
+      const availableTokens = new Set(normalizeCommands(result?.commands).map((command) => command.token))
+      const hasGovernance = controlGroupDefinitions
+        .find((group) => group.id === 'governance')
+        ?.commandNames.some((name) => availableTokens.has(`/${name}`))
+      const hasPersonal = controlGroupDefinitions
+        .find((group) => group.id === 'personal')
+        ?.commandNames.some((name) => availableTokens.has(`/${name}`))
+      const canGovern = ['permission_manager', 'admin'].includes(String(result?.context?.access_tier || ''))
+      activeControlGroup.value = canGovern && hasGovernance ? 'governance' : hasPersonal ? 'personal' : 'runtime'
+    }
   } catch (err: any) {
     catalog.value = null
+    catalogError.value = err?.messages?.[0] || err?.message || 'Could not load commands.'
     if (isGatewayConfigError(err)) {
       gatewayConfigError.value = true
     }
+  } finally {
+    catalogLoading.value = false
   }
 }
 
@@ -750,6 +927,7 @@ async function loadHistory() {
           content: answer,
           status: turn.error ? 'error' : 'done',
           runName: turn.run,
+          presentation: turn.presentation || undefined,
         })
       }
     }
@@ -931,6 +1109,7 @@ async function submit() {
     const idx = ensureStreamingAssistant()
     messages.value[idx].content = typeof draft === 'string' ? draft : JSON.stringify(draft, null, 2)
     messages.value[idx].status = 'done'
+    messages.value[idx].presentation = runResp?.proposal?.presentation || undefined
     state.thinkingLine.value = 'Ready for review.'
     clearPrompt()
     scrollThreadToBottom()
@@ -944,6 +1123,16 @@ async function submit() {
   }
 
   clearPrompt()
+}
+
+async function runCommand(command: string) {
+  const value = String(command || '').trim()
+  if (!value || state.running.value || !editor.value) return
+  closeSuggestion()
+  editor.value.commands.setContent(`<p>${escapeHtml(value)}</p>`)
+  promptText.value = value
+  await nextTick()
+  await submit()
 }
 
 async function onStop() {
@@ -1086,6 +1275,125 @@ watch(
   flex-direction: column;
   overflow: hidden;
 }
+.oc-control-center {
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--surface-gray-3, #e5e7eb);
+  background: var(--surface-white, #ffffff);
+}
+.oc-control-center-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem 0.5rem;
+}
+.oc-access-badge {
+  flex: 0 0 auto;
+  border: 1px solid #99f6e4;
+  border-radius: 999px;
+  background: #f0fdfa;
+  padding: 0.2rem 0.5rem;
+  color: #115e59;
+  font-size: 0.65rem;
+  font-weight: 650;
+}
+.oc-control-tabs {
+  display: flex;
+  gap: 0.25rem;
+  overflow-x: auto;
+  padding: 0 0.75rem 0.5rem;
+  scrollbar-width: thin;
+}
+.oc-control-tabs button {
+  display: inline-flex;
+  min-width: max-content;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.35rem 0.55rem;
+  color: var(--ink-gray-6, #4b5563);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+.oc-control-tabs button:hover {
+  background: var(--surface-gray-1, #f9fafb);
+  color: var(--ink-gray-9, #111827);
+}
+.oc-control-tabs button.is-active {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+  color: #115e59;
+}
+.oc-control-tabs button small {
+  min-width: 1.1rem;
+  border-radius: 999px;
+  background: var(--surface-gray-2, #f3f4f6);
+  padding: 0.05rem 0.3rem;
+  text-align: center;
+  color: var(--ink-gray-5, #6b7280);
+  font-size: 0.62rem;
+}
+.oc-control-tabs button.is-active small {
+  background: #ccfbf1;
+  color: #115e59;
+}
+.oc-control-actions {
+  display: grid;
+  max-height: 10rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow-y: auto;
+  border-top: 1px solid var(--surface-gray-2, #f3f4f6);
+  background: var(--surface-gray-1, #f9fafb);
+  scrollbar-gutter: stable;
+}
+.oc-control-actions button {
+  display: grid;
+  min-width: 0;
+  min-height: 3.1rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.5rem;
+  border-right: 1px solid var(--surface-gray-2, #f3f4f6);
+  border-bottom: 1px solid var(--surface-gray-2, #f3f4f6);
+  padding: 0.55rem 0.65rem;
+  color: var(--ink-gray-6, #4b5563);
+  text-align: left;
+}
+.oc-control-actions button:hover:not(:disabled) {
+  background: #ecfeff;
+  color: #0f766e;
+}
+.oc-control-actions button:focus-visible {
+  outline: 2px solid #0f766e;
+  outline-offset: -2px;
+}
+.oc-control-actions button:disabled {
+  cursor: wait;
+  opacity: 0.45;
+}
+.oc-control-actions button strong,
+.oc-control-actions button small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.oc-control-actions button strong {
+  color: var(--ink-gray-8, #1f2937);
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1rem;
+}
+.oc-control-actions button small {
+  color: var(--ink-gray-5, #6b7280);
+  font-size: 0.62rem;
+  line-height: 0.85rem;
+}
+.oc-control-actions button:hover:not(:disabled) strong,
+.oc-control-actions button:hover:not(:disabled) small {
+  color: #115e59;
+}
 .oc-assistant-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -1100,6 +1408,15 @@ watch(
 }
 @media (max-width: 640px) {
   .oc-drawer-shell { left: 0; right: 0; top: 0; bottom: 0; border-radius: 0; }
+  .oc-control-actions {
+    max-height: 11rem;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 641px) and (max-width: 1024px) {
+  .oc-control-actions {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 .oc-prompt-editor {
   padding: 0.75rem 0.75rem 0.5rem;
@@ -1115,8 +1432,8 @@ watch(
 }
 .oc-prompt-editor :deep(.oc-slash),
 .oc-prompt-editor :deep(.oc-agent) {
-  background: rgba(99, 102, 241, 0.08);
-  color: #4338ca;
+  background: rgba(13, 148, 136, 0.1);
+  color: #0f766e;
   padding: 0 4px;
   border-radius: 4px;
   font-weight: 500;

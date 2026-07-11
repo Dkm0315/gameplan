@@ -379,7 +379,7 @@ const canUseOpenClawHandoff = computed(() => {
 const openClawHandoffActionProps = computed(() => {
   if (!canUseOpenClawHandoff.value) return null
   return {
-    label: '@OpenClaw',
+    label: '@Muster',
     iconLeft: 'lucide-sparkles',
     variant: 'subtle',
     loading: aiHandoff.loading,
@@ -633,7 +633,7 @@ async function insertOpenClawHandoff() {
 }
 
 function buildOpenClawHandoffComment(context: AIHandoffContext | null) {
-  const mention = escapeHtml(context?.assistant?.mention || '@OpenClaw')
+  const mention = escapeHtml(context?.assistant?.mention || '@Muster')
   const title = escapeHtml(context?.discussion?.title || context?.reference?.title || 'this discussion')
   const space = context?.space?.title ? ` in ${escapeHtml(context.space.title)}` : ''
   const approval = context?.automation?.requires_human_approval !== false

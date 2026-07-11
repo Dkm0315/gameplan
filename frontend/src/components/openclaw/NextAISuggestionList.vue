@@ -5,13 +5,14 @@
     role="listbox"
     aria-label="Muster suggestions"
   >
-    <template v-if="hasItems">
+    <div v-if="loading" class="oc-suggestion-loading" aria-live="polite">
+      <span v-for="index in 4" :key="index" />
+    </div>
+    <template v-else-if="hasItems">
       <div v-for="(group, gIdx) in groupedItems" :key="`g-${gIdx}-${group.label}`">
-        <div
-          v-if="group.label"
-          class="bg-surface-gray-1 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wide text-ink-gray-5"
-        >
-          {{ group.label }}
+        <div v-if="group.label" class="oc-suggestion-group">
+          <span>{{ group.label }}</span>
+          <span>{{ group.items.length }}</span>
         </div>
         <button
           v-for="item in group.items"
@@ -29,11 +30,11 @@
           <span class="oc-suggestion-token rounded px-1.5 py-0.5 text-xs font-medium">
             {{ item.token }}
           </span>
-          <span class="oc-suggestion-hint min-w-0 flex-1 truncate text-xs leading-5">{{ item.hint }}</span>
+          <span class="oc-suggestion-hint min-w-0 flex-1 text-xs leading-5">{{ item.hint }}</span>
         </button>
       </div>
     </template>
-    <div v-else class="px-3 py-2 text-xs text-ink-gray-5">No matches</div>
+    <div v-else class="px-3 py-3 text-xs text-ink-gray-5">{{ emptyLabel || 'No matches' }}</div>
   </div>
 </template>
 
@@ -52,6 +53,8 @@ export type SuggestionItem = {
 const props = defineProps<{
   items: SuggestionItem[]
   command: (item: SuggestionItem) => void
+  loading?: boolean
+  emptyLabel?: string
 }>()
 
 const selectedIndex = ref(0)
@@ -141,6 +144,16 @@ function onKeyDown(event: KeyboardEvent) {
     keepSelectionVisible()
     return true
   }
+  if (event.key === 'PageUp' && props.items.length) {
+    selectedIndex.value = Math.max(0, selectedIndex.value - 6)
+    keepSelectionVisible()
+    return true
+  }
+  if (event.key === 'PageDown' && props.items.length) {
+    selectedIndex.value = Math.min(props.items.length - 1, selectedIndex.value + 6)
+    keepSelectionVisible()
+    return true
+  }
   return false
 }
 
@@ -149,9 +162,36 @@ defineExpose({ onKeyDown, moveUp, moveDown, enter })
 
 <style scoped>
 .oc-suggestion-list {
-  max-height: 280px;
+  max-height: min(420px, 52vh);
   min-width: 280px;
-  width: min(420px, calc(100vw - 32px));
+  width: 100%;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.oc-suggestion-group {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--surface-gray-2, #f3f4f6);
+  background: var(--surface-gray-1, #f9fafb);
+  padding: 0.35rem 0.75rem;
+  color: var(--ink-gray-5, #6b7280);
+  font-size: 0.65rem;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+.oc-suggestion-loading {
+  display: grid;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+.oc-suggestion-loading span {
+  height: 2rem;
+  border-radius: 6px;
+  background: var(--surface-gray-2, #f3f4f6);
+  animation: oc-suggestion-pulse 1s ease-in-out infinite alternate;
 }
 .oc-suggestion-item {
   color: var(--ink-gray-7, #374151);
@@ -165,6 +205,7 @@ defineExpose({ onKeyDown, moveUp, moveDown, enter })
 }
 .oc-suggestion-hint {
   color: var(--ink-gray-6, #4b5563);
+  overflow-wrap: anywhere;
 }
 .oc-suggestion-item--selected,
 .oc-suggestion-item--selected:hover {
@@ -177,5 +218,9 @@ defineExpose({ onKeyDown, moveUp, moveDown, enter })
 }
 .oc-suggestion-item--selected .oc-suggestion-hint {
   color: rgba(255, 255, 255, 0.84);
+}
+@keyframes oc-suggestion-pulse {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
 }
 </style>
