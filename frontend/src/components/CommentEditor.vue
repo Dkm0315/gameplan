@@ -18,7 +18,7 @@
         <TextEditorFixedMenu class="-ml-1 overflow-x-auto" :buttons="textEditorMenuButtons" />
         <div class="mt-2 flex items-center justify-end space-x-2 sm:mt-0">
           <Button v-if="assistantActionProps" v-bind="assistantButtonProps">
-            {{ assistantActionProps.label || '@OpenClaw' }}
+            {{ assistantActionProps.label || '@Muster' }}
           </Button>
           <Button v-bind="discardButtonProps || {}"> Discard </Button>
           <Button variant="solid" v-bind="submitButtonProps || {}"> Submit </Button>

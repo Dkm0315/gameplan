@@ -42,11 +42,7 @@ const users = computed(() => {
       value: '_everyone_',
     },
     {
-      label: 'NextAI',
-      value: 'nextai',
-    },
-    {
-      label: 'OpenClaw',
+      label: 'Muster',
       value: 'openclaw',
     },
   ].concat(
